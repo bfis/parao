@@ -70,7 +70,7 @@ def cast(val: Any, typ: type) -> Any:
                     }
                 )
 
-        raise TypeError(f"type no understood: {typ}")  # no cov
+        raise TypeError(f"type no understood: {typ}")  # pragma: no cover
     elif typ is Any:
         return val
     # primitive types

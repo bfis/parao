@@ -23,4 +23,4 @@ parao = ["src/parao", "*/parao/src/parao"]
 tests = ["tests", "*/parao/tests"]
 
 [tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+exclude_also = ["^ *def +.+: +\\.\\.\\.$"]
