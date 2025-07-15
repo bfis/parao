@@ -13,12 +13,12 @@ from typing import (
     get_type_hints,
 )
 
-# from .cast import cast
+from .cast import cast, Opaque
 
 __all__ = ["UNSET", "ParaO", "Param"]
 
 
-UNSET = object()
+UNSET = Opaque()
 
 _param_counter = count()
 
@@ -218,7 +218,7 @@ class ParaOMeta(type):
                     del cache[name]
         return super().__delattr__(name)
 
-    def __cast_from__(cls, value):
+    def __cast_from__(cls, value, original_type):
         if value is UNSET:
             return cls()
         if isinstance(value, cls):
@@ -282,22 +282,11 @@ class AbstractParam[T]:
     def _solve_types(cls: "ParaOMeta"):
         return get_type_hints(cls)
 
-    def _cast(self, val, typ):
-        if val is not UNSET:
-            if cast_to := getattr(val, "__cast_to__", None):
-                val = cast_to(typ)
-        if typ is not UNSET:
-            if cast_from := getattr(typ, "__cast_from__", None):
-                val = cast_from(val)
-            elif val is not UNSET:
-                val = typ(val)
-        return val
-
     def _get(self, val: Any, name: str, instance: "ParaO") -> T:
         typ = self.type
         if typ is UNSET:
             typ = self._solve_types(type(instance)).get(name, UNSET)
-        return self._cast(val, typ)
+        return cast(val, typ)
 
     def __get__(self, instance: "ParaO", owner: type | None = None) -> T:
         if instance is None:
