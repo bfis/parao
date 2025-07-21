@@ -1,5 +1,18 @@
+from operator import attrgetter
 from unittest import TestCase
-from parao.core import Arg, Arguments, ParaO, Param, MissingParameterValue, srepr
+from unittest.mock import Mock
+from parao.core import (
+    Arg,
+    Arguments,
+    Expansion,
+    ParaO,
+    Param,
+    MissingParameterValue,
+    UntypedParameter,
+    eager,
+    DuplicateParameter,
+    ExpansionGeneratedKeyMissingParameter,
+)
 
 
 uniq_object = object()
@@ -106,6 +119,9 @@ class TestParaO(TestCase):
 
         self.assertRaises(TypeError, lambda: ParaO({ParaO: 123}))
 
+        with self.assertRaises(DuplicateParameter):
+            Sub.foo1 = Sub.foo2 = Param()
+
     def test_own_params(self):
         class Sub(ParaO):
             foo: int = Param()
@@ -131,11 +147,15 @@ class TestParaO(TestCase):
             foo: int = Param()
             bar = Param(None, type=str)
             boo = Param[bool]()
+            bad = Param(None)
 
         self.assertEqual(Sub.boo.type, bool)
 
         with self.assertRaises(MissingParameterValue):
             Sub().foo
+        with self.assertWarns(UntypedParameter):
+            Sub().bad
+
         self.assertEqual(Sub({"foo": 123}).foo, 123)
         self.assertEqual(Sub({Sub.foo: 123}).foo, 123)
         self.assertEqual(Sub({(Sub, "foo"): 123}).foo, 123)
@@ -185,13 +205,104 @@ class TestParaO(TestCase):
         # self.assertEqual(obj.one.foo, 123)
         # self.assertEqual(obj.other.foo, 123)
 
+    def test_expansion(self):
 
-class TestMisc(TestCase):
-    def test_srepr(self):
+        class Foo(ParaO):
+            bar = Param[int]()
 
-        class Foo:
-            def __repr__(self):
-                raise RuntimeError()
+        with eager(False):
+            f = Foo(bar=[1, 2, 3])
+            # raises on access
+            self.assertRaises(Expansion, lambda: f.bar)
 
-        self.assertRaises(RuntimeError, lambda: repr(Foo()))
-        self.assertEqual(srepr(o := Foo()), object.__repr__(o))
+        with eager(True):
+            self.assertRaises(Expansion, lambda: Foo(bar=[1, 2, 3]))
+            try:
+                Foo(bar=[1, 2, 3])
+            except Expansion as exp:
+                self.assertEqual(exp.param, Foo.bar)
+                self.assertEqual(exp.param_name, "bar")
+                self.assertEqual(exp.values, (1, 2, 3))
+
+    def test_collect(self):
+
+        class Foo(ParaO):
+            bar = Param[int]()
+
+        # function based
+        func = Mock(return_value=True)
+
+        class Wrap(ParaO):
+            foo = Param[Foo](collect=func)
+
+        with eager(True):
+            inst = Wrap(bar=[1, 2, 3])
+        exp = inst.foo
+        func.assert_called_once_with(exp, inst)
+        self.assertIsInstance(exp.source, Foo)
+        self.assertIsInstance(exp, Expansion)
+        # self.assertEqual(exp._unwind, [])
+        self.assertEqual(exp.make_key(), ("bar",))
+        self.assertEqual(exp.make_key(False), (Foo, "bar"))
+        self.assertEqual(exp.make_key(False, use_cls=False), ("bar",))
+        self.assertEqual(exp.make_key(False, use_name=False), (Foo, Foo.bar))
+        with self.assertWarns(ExpansionGeneratedKeyMissingParameter):
+            self.assertEqual(
+                exp.make_key(False, use_param=False),
+                (Foo, "bar"),
+            )
+        with self.assertWarns(ExpansionGeneratedKeyMissingParameter):
+            self.assertEqual(
+                exp.make_key(False, want=(Foo,), use_name=False), (Foo, Foo.bar)
+            )
+        self.assertEqual(exp.make_key(False, want=(Foo.bar,)), ("bar",))
+        self.assertIsInstance(repr(exp), str)
+
+        # bare argument based
+        items = [[Foo], [Foo.bar], ["bar"]]
+        for coll in items + [[it] for it in items]:
+            with self.subTest(coll=coll), eager(True):
+                Wrap.foo.collect = coll
+                self.assertIsInstance(Wrap(bar=[1, 2, 3]).foo, Expansion)
+
+    def test_expand(self):
+        # uses two level expandable scenario
+
+        class Foo(ParaO):
+            bar = Param[int]()
+
+        class Mid(ParaO):
+            boo = Param[int](0)
+            foo = Param[Foo]()
+
+        class Wrap2(ParaO):
+            mid = Param[Mid](collect=Mock(return_value=True))
+
+        with eager(True):
+            self.assertEqual(Wrap2(bar=[1, 2, 3]).mid.make_key(), ("bar",))
+            self.assertEqual(
+                Wrap2({("foo", "bar"): [1, 2, 3]}).mid.make_key(), ("foo", "bar")
+            )
+            self.assertEqual(
+                Wrap2(foo=dict(bar=[1, 2, 3])).mid.make_key(), (Mid, "foo", "bar")
+            )
+            self.assertSequenceEqual(
+                list(map(attrgetter("foo.bar"), Wrap2(bar=[1, 2, 3]).mid.expand())),
+                [1, 2, 3],
+            )
+            self.assertSequenceEqual(
+                list(
+                    map(
+                        attrgetter("boo", "foo.bar"),
+                        Wrap2(boo=[1, -1], bar=[1, 2, 3]).mid.expand(),
+                    )
+                ),
+                [
+                    (1, 1),
+                    (1, 2),
+                    (1, 3),
+                    (-1, 1),
+                    (-1, 2),
+                    (-1, 3),
+                ],
+            )

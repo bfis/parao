@@ -6,7 +6,7 @@ _numeric = int, float, complex
 
 
 class Opaque:
-    """These instances are cast only via __cast_from__."""
+    """Ignored during casting unless they are Castable."""
 
 
 class Castable(Protocol):
