@@ -24,6 +24,10 @@ class TestCasting(TestCase):
         self.assertEqual(cast({"123": 456}, dict[int, str]), {123: "456"})
         self.assertEqual(cast([("123", 456)], dict[int, str]), {123: "456"})
 
+        # no str/bytes to sequence
+        self.assertRaises(ValueError, lambda: cast("123", list[int]))
+        self.assertRaises(ValueError, lambda: cast(b"123", tuple[int, ...]))
+
         # empty tuple
         self.assertEqual(cast([], tuple[()]), ())
         self.assertRaises(ValueError, lambda: cast([1], tuple[()]))
@@ -49,3 +53,17 @@ class TestCasting(TestCase):
                 raise NotImplementedError
 
         self.assertRaises(TypeError, lambda: cast(1, Foo))
+
+        class Bar:
+            def __cast_to__(self, typ, original_type):
+                try:
+                    return typ(1.2)
+                except Exception:
+                    raise NotImplementedError
+
+        self.assertEqual(cast(Bar(), int), 1)
+        self.assertRaises(TypeError, lambda: cast(Bar(), list))
+
+        class Boo[T]: ...
+
+        self.assertRaises(TypeError, lambda: cast(1, Boo[int]))

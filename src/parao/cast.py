@@ -20,6 +20,12 @@ def cast(val: Any, typ: type) -> Any:
         (typ,) = typ.__args__
     ori = get_origin(typ)
 
+    if cast_to := getattr(val, "__cast_to__", None):
+        try:
+            return cast_to(typ, typ0)
+        except NotImplementedError:
+            pass
+
     if cast_from := getattr(ori or typ, "__cast_from__", None):
         try:
             return cast_from(val, typ0)
@@ -33,16 +39,19 @@ def cast(val: Any, typ: type) -> Any:
         args = get_args(typ)
 
         if ori is UnionType or ori is Union:
-            for more, arg in enumerate(args, start=1 - len(args)):
+            for arg in args:
                 try:
                     return cast(val, arg)
-                except Exception:
+                except (TypeError, ValueError):
                     pass
             else:
                 raise TypeError(f"could not cast {val!r} to {typ}")
 
         # container types
-        if isinstance(ori, type):
+        if isinstance(ori, type):  # pragma: no branch
+
+            if isinstance(val, (str, bytes)):
+                raise ValueError(f"can't cast {type(val)} to container")
 
             if issubclass(ori, tuple):
                 if not args:
@@ -70,7 +79,7 @@ def cast(val: Any, typ: type) -> Any:
                     }
                 )
 
-        raise TypeError(f"type no understood: {typ}")  # pragma: no cover
+        raise TypeError(f"type no understood: {typ}")
     elif typ is Any:
         return val
     # primitive types

@@ -1,6 +1,6 @@
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
-from typing import Any, overload
+from typing import Any, Iterable, overload
 
 _sentinel = object()
 
@@ -61,3 +61,41 @@ def safe_len[T](obj: Any, default: T = None) -> int | T:
         return len(obj)
     except Exception:
         return default
+
+
+class PeekableIter[T]:
+    __slots__ = (
+        "_iter",
+        "_head",
+    )
+
+    def __init__(self, it: Iterable[T]):
+        self._iter = iter(it)
+        self._head = _sentinel
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> T:
+        if self._head is _sentinel:
+            return next(self._iter)
+        else:
+            ret = self._head
+            self._head = _sentinel
+            return ret
+
+    def peek(self, default=_sentinel) -> T:
+        if self._head is _sentinel:
+            try:
+                self._head = next(self._iter)
+            except StopIteration:
+                if default is _sentinel:
+                    raise
+                else:
+                    return default
+        return self._head
+
+
+def is_subseq(needles, haystack):
+    haystack = iter(haystack)
+    return all(needle in haystack for needle in needles)

@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Collection,
+    Generator,
     Iterable,
     Mapping,
     Protocol,
@@ -112,13 +113,11 @@ class Arguments(tuple["Arguments | Arg", ...]):
     is_final = False
 
     @classmethod
-    def make(
-        cls, *args: "Arguments | HasArguments | Mapish[KeyTE, Any]", **kwargs: Any
-    ):
+    def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
         return cls._make(args + (kwargs,)) if kwargs else cls._make(args)
 
     @classmethod
-    def _make(cls, args: "tuple[Arguments | HasArguments | Mapish[KeyTE, Any], ...]"):
+    def _make(cls, args: "tuple[Arguments | HasArguments | dict[KeyTE, Any], ...]"):
         sub = []
         if arg := cls._ctxargs():
             sub.append(arg)
@@ -248,7 +247,7 @@ class ParaOMeta(type):
         return cls(value)
 
     def __call__(
-        cls, *args: Arguments | HasArguments | Mapish[KeyTE, Any], **kwargs: Any
+        cls, *args: Arguments | HasArguments | dict[KeyTE, Any], **kwargs: Any
     ) -> Self:
         arg = Arguments._make(args + (kwargs,) if kwargs else args)
         ret = cls.__new__(arg.solve_class(cls)[1])
@@ -422,6 +421,8 @@ class Expansion[T](BaseException):
         self.values = values
         self._frames = []
 
+    _get: Callable[[Arg], T | Self]
+
     def test(self, item: KeyE | Iterable[KeyE]):
         match item:
             case AbstractParam():
@@ -511,7 +512,7 @@ class Expansion[T](BaseException):
                 rkey.append(cls)
         return tuple(reversed(rkey))
 
-    def expand(self, prio: PrioT = 0, **kwargs):
+    def expand(self, prio: PrioT = 0, **kwargs) -> Generator[T]:
         key = self.make_key(**kwargs)
         for val in self.values:
             res = self._get(Arg(key, val, prio))
@@ -519,6 +520,18 @@ class Expansion[T](BaseException):
                 yield from res.expand(prio=prio, **kwargs)
             else:
                 yield res
+
+    @staticmethod
+    def generate(typ: ParaOMeta, args: Arguments, **kwargs) -> Generator[ParaO]:
+        try:
+            yield typ(args)
+        except Expansion as exp:
+            exp._get = lambda arg: typ(Arguments((args, arg)))
+            try:
+                yield from exp.expand(**kwargs)
+            except Exception as exc:
+                exc.add_note(f"while expanding: {exp!r}")
+                raise
 
     @property
     def param_name(self):
