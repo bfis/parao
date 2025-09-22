@@ -51,19 +51,19 @@ def cast(val: Any, typ: type) -> Any:
         if isinstance(ori, type):  # pragma: no branch
 
             if isinstance(val, (str, bytes)):
-                raise ValueError(f"can't cast {type(val)} to container")
+                raise TypeError(f"can't cast {type(val)} to container")
 
             if issubclass(ori, tuple):
                 if not args:
                     if val:
-                        raise ValueError("too many values given")
+                        raise TypeError("too many values given")
                     return val if isinstance(val, ori) else ori()
                 if args[1:] == (Ellipsis,):
                     return ori(map(cast, val, repeat(args[0])))
 
                 ret = ori(map(cast, val, args))
                 if len(ret) != len(args):
-                    raise ValueError("wrong number of values")
+                    raise TypeError("wrong number of values")
                 return ret
 
             if issubclass(ori, (list, set, frozenset)):
@@ -85,10 +85,14 @@ def cast(val: Any, typ: type) -> Any:
     # primitive types
     elif typ is None or typ is NoneType:
         if val is not None:
-            raise ValueError("invalid value for None")
+            raise TypeError("invalid value for None")
         return None
     elif isinstance(val, typ):
         return val
+    elif isinstance(val, str) and (
+        typ is bool or isinstance(type, typ) and issubclass(typ, bool)
+    ):
+        raise TypeError("can't cast {val!r} to {typ}")
     else:
         ret = typ(val)
         if isinstance(val, _numeric) and isinstance(ret, _numeric) and ret != val:

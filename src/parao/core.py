@@ -328,7 +328,7 @@ class AbstractParam[T]:
         if True or typ is not UNSET:
             try:
                 exp = cast(val, Expansion[typ])
-            except Exception:
+            except TypeError:
                 pass
             else:
                 if isinstance(exp, Expansion):
