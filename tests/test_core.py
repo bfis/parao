@@ -229,6 +229,20 @@ class TestParaO(TestCase):
         # self.assertEqual(obj.one.foo, 123)
         # self.assertEqual(obj.other.foo, 123)
 
+    def test_common_base(self):
+        class Base(ParaO):
+            foo = Param[int](0)
+
+        class Ext1(Base):
+            pass
+
+        class Ext2(Base):
+            ext1 = Param[Ext1]()
+
+        ext2 = Ext2(foo=1)
+        self.assertEqual(ext2.foo, 1)
+        self.assertEqual(ext2.ext1.foo, 0)
+
     def test_expansion(self):
 
         class Foo(ParaO):

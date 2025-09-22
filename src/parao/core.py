@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache, partial
 from itertools import count
@@ -71,25 +72,27 @@ class Arg:
     def __lt__(self, other: "Arg | None") -> bool:
         return other is not None and self.prio < other.prio
 
-    @lru_cache
-    def solve_value(self, param, owner, name):
+    # @lru_cache
+    def _solve_value(self, ref: "ParaOMeta"):
         last = len(self.key) - 1
         off = self.offset
         # match owner class filters
         while (
             isinstance((key := self.key[off]), type)
             and off < last
-            and issubclass(owner, key)
+            and issubclass(ref, key)
         ):
             off += 1
-        # test param itself
-        if param is key or (isinstance(key, str) and key == name):
-            arg = Arg(self.key, self.val, self.prio, off + 1)
-            if off < last:
-                return None, arg
-            else:
-                return arg, ()
-        return None, self
+
+        op = ref.__own_parameters__
+        if key in op.vals or (key := op.get(key)):
+            return (
+                key,
+                Arg(self.key, self.val, self.prio, off + 1),
+                off == self.offset,  # is_final & no class filter
+            )
+        else:
+            return None, None, False
 
     @lru_cache
     def solve_class[T: type](self, cls: T) -> tuple[PrioT, "T | Arg | Arguments"]:
@@ -166,23 +169,51 @@ class Arguments(tuple["Arguments | Arg", ...]):
     def __repr__(self):
         return self.__class__.__name__ + (tuple.__repr__(self) if self else "()")
 
-    @lru_cache
     def solve_value(self, param, owner, name) -> tuple[Arg | None, "Arguments"]:
-        val, sub = None, []
+        com, val, sub = self._solve_values(owner)
+        su = sub.get(param)
 
-        for v in self:
-            while True:
-                v, s = v.solve_value(param, owner, name)
-                if s:
-                    sub.append(s)
-                if v is None:
-                    break
-                else:
-                    val = max(v, val)
-                    if v.is_final:
-                        break
+        return val.get(param), com if su is None else Arguments.from_list(su)
 
-        return val, Arguments.from_list(sub)
+    @lru_cache
+    def _solve_values(self, ref: "ParaOMeta"):
+        com = []
+        val: dict[AbstractParam, Arg] = {}
+        sub: defaultdict[AbstractParam, list[Arguments | Arg]]
+
+        if False:
+            sub = defaultdict(com.copy)  # TODO: optimize this
+        else:  # optimized behaviour
+
+            @defaultdict
+            def sub():
+                nonlocal com
+                if len(com) > 1:
+                    com = [Arguments.from_list(com)]
+                return com.copy()
+
+        for arg in self:
+            if isinstance(arg, Arg):
+                k, d, r = arg._solve_value(ref)
+                if not r:
+                    sub.get(k, com).append(arg)
+                if d is not None:
+                    assert k is not None
+                    if d.is_final:
+                        if isinstance(d.val, (Arguments, Arg)):
+                            sub[k].append(d.val)
+                        else:
+                            val[k] = max(d, val.get(k))
+                    else:
+                        sub[k].append(d)
+            else:
+                c, v, s = arg._solve_values(ref)
+                val.update(v)
+                for k, v in s.items():
+                    sub[k].extend(v)
+                com.append(c)  # must be done after filling sub
+
+        return Arguments.from_list(com), val, sub
 
     @lru_cache
     def solve_class(self, cls):
@@ -320,6 +351,19 @@ type ExpansionFilter = Collection[KeyE | Collection[KeyE]] | Callable[
 class DuplicateParameter(RuntimeError): ...
 
 
+@lru_cache
+def _solve_name(param: "Param", icls: "ParaOMeta") -> str | None:
+    lut = param._owner2name
+    for cls in icls.__mro__:
+        if cls in lut:
+            return lut[cls]
+
+
+@lru_cache
+def _get_type_hints(cls: "ParaOMeta"):
+    return get_type_hints(cls)
+
+
 ### actual code
 class AbstractParam[T]:
     def __class_getitem__(cls, key):
@@ -344,26 +388,16 @@ class AbstractParam[T]:
             self._owner2name[cls] = name
         else:
             del self._owner2name[cls]
-        self._solve_name.cache_clear()
+        _solve_name.cache_clear()
 
-    def solve_name(self, instance: "ParaO"):
-        return self._solve_name(self, type(instance))
+    def _solve_name(self, instance: "ParaO"):
+        return _solve_name(self, type(instance))
 
-    @staticmethod
-    @lru_cache
-    def _solve_name(param: "Param", icls: "ParaOMeta") -> str | None:
-        lut = param._owner2name
-        for cls in icls.__mro__:
-            if cls in lut:
-                return lut[cls]
-
-    @staticmethod
-    @lru_cache
-    def _solve_types(cls: "ParaOMeta"):
-        return get_type_hints(cls)
+    def _solve_type(self, cls: "ParaOMeta", name: str):
+        return _get_type_hints(cls).get(name, UNSET)
 
     def _cast(self, val, typ):
-        if True or typ is not UNSET:
+        if typ is not UNSET:
             try:
                 exp = cast(val, Expansion[typ])
             except TypeError:
@@ -376,7 +410,7 @@ class AbstractParam[T]:
     def _get(self, val: Any, name: str, instance: "ParaO") -> T:
         typ = self.type
         if typ is UNSET:
-            typ = self._solve_types(type(instance)).get(name, UNSET)
+            typ = self._solve_type(type(instance), name)
         if typ is UNSET:
             warn(
                 f"{type(self)} {name} on {type(instance)}",
@@ -392,7 +426,7 @@ class AbstractParam[T]:
         name: str,
         instance: "ParaO",
         *args: Arguments | Arg,
-    ) -> T:
+    ):
         val = UNSET if arg is None or arg.prio < self.min_prio else arg.val
 
         try:
@@ -406,10 +440,10 @@ class AbstractParam[T]:
             exc.add_note(f"parameter {name}={safe_repr(self)} on {safe_repr(instance)}")
             raise
 
-    def __get__(self, instance: "ParaO", owner: type | None = None) -> T:
+    def __get__(self, instance: "ParaO", owner: type | None = None):
         if instance is None:
             return self
-        name = self._solve_name(self, type(instance))
+        name = self._solve_name(instance)
 
         arg, sub = instance.__args__.solve_value(self, type(instance), name)
 
@@ -573,7 +607,7 @@ class Expansion[T](BaseException):
 
     @property
     def param_name(self):
-        return self.param.solve_name(self.source)
+        return self.param._solve_name(self.source)
 
     def __repr__(self):
         parts = [f"< {safe_len(self.values)} values >"]
