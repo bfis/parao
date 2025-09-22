@@ -3,6 +3,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 from parao.core import (
     UNSET,
+    AbstractParam,
     Arg,
     Arguments,
     Expansion,
@@ -114,6 +115,20 @@ class TestParam(TestCase):
         self.assertIs(Param(type=(o := object())).type, o)
         self.assertIs(Param[o := object()]().type, o)
         self.assertRaises(TypeError, lambda: Param[int, str])
+
+    def test_typed_alias(self):
+        class Sentinel:
+            pass
+
+        class StrangeParam(AbstractParam):
+            type = Sentinel
+
+        self.assertIs(StrangeParam().type, Sentinel)
+
+        with self.assertRaises(TypeError):
+
+            class BadTypeVarParam[Q, T](AbstractParam[T]):
+                pass
 
 
 class TestParaO(TestCase):

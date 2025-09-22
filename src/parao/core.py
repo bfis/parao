@@ -12,6 +12,8 @@ from typing import (
     Mapping,
     Protocol,
     Self,
+    TypeVar,
+    _GenericAlias,
     get_type_hints,
 )
 from warnings import warn
@@ -285,9 +287,26 @@ class ParaO(metaclass=ParaOMeta):
 
 class TypedAlias(GenericAlias):
     def __call__(self, *args, **kwds):
-        (typ,) = self.__args__
-        kwds.setdefault("type", typ)
+        kwds.setdefault("type", self.__args__[0])
         return super().__call__(*args, **kwds)
+
+    @classmethod
+    def convert(cls, ga: _GenericAlias):
+        return cls(ga.__origin__, ga.__args__)
+
+    @classmethod
+    def init_subclass(cls, other: type):
+        if "type" in other.__dict__:
+            return
+        for ob in other.__orig_bases__:
+            if isinstance(ob, cls):
+                typ = ob.__args__[0]
+                if isinstance(typ, TypeVar):
+                    if other.__type_params__[:1] != ob.__args__[:1]:
+                        raise TypeError(f"first typevar of {other} must be {typ}")
+                else:
+                    setattr(other, "type", typ)
+                return
 
 
 class UntypedParameter(RuntimeWarning): ...
@@ -304,11 +323,11 @@ class DuplicateParameter(RuntimeError): ...
 ### actual code
 class AbstractParam[T]:
     def __class_getitem__(cls, key):
-        if not isinstance(key, tuple):
-            key = (key,)
-        if len(key) != 1:
-            raise TypeError(f"{cls.__qualname__} can only receive one type argument")
-        return TypedAlias(cls, key)
+        return TypedAlias.convert(super().__class_getitem__(key))
+
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        TypedAlias.init_subclass(cls)
 
     __slots__ = ("__dict__", "_owner2name", "_id")
 
