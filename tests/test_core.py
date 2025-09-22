@@ -384,3 +384,38 @@ class TestParaO(TestCase):
                     (-1, 3),
                 ],
             )
+
+    def test_inner(self):
+        class In(ParaO):
+            exp = Param[int](0)
+
+            @Prop
+            def uniq(self) -> int:
+                return id(self)
+
+        class Out(ParaO):
+            in1 = Param[In](collect=[In.exp])
+            in2 = Param[list[In]]([])
+
+            in3u = Param[In](significant=False)
+
+            @Prop
+            def in3(self):
+                return {
+                    "deep": [
+                        "nested",
+                        ("structure", {"with", frozenset({"some", (self.in3u,) * 2})}),
+                    ]
+                }
+
+        out1 = Out()
+        self.assertEqual(out1.__inner__, (out1.in1, *out1.in2, out1.in3u, out1.in3u))
+
+        out2 = Out(in2=[In(), In()])
+        self.assertEqual(out2.__inner__, (out2.in1, *out2.in2, out2.in3u, out2.in3u))
+
+        with eager(True):
+            out3 = Out({("in1", "exp"): [1, 2]})
+        self.assertEqual(out3.__inner__[0].exp, 1)
+        self.assertEqual(out3.__inner__[1].exp, 2)
+        self.assertEqual(out3.__inner__[2:], (out3.in3u, out3.in3u))

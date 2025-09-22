@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import lru_cache, partial
+from functools import cached_property, lru_cache, partial
 from itertools import count
 from math import inf
 from types import GenericAlias
@@ -321,6 +321,33 @@ class ParaOMeta(type):
 
 class ParaO(metaclass=ParaOMeta):
     __args__: Arguments  # | UNSET
+
+    @cached_property
+    def __inner__(self) -> tuple["ParaO", ...]:
+        ret = []
+        for name, param in self.__class__.__own_parameters__.items():
+            if param.significant:
+                val = getattr(self, name)
+                if isinstance(val, ParaO):
+                    ret.append(val)
+                elif isinstance(val, Expansion):
+                    ret.extend(val.expand())
+                elif isinstance(val, (dict, list, tuple, set, frozenset)):
+                    queue = [iter((val,))]
+                    while queue:
+                        for curr in queue[-1]:
+                            if isinstance(curr, (list, tuple, set, frozenset)):
+                                queue.append(iter(curr))
+                                break
+                            elif isinstance(curr, dict):
+                                queue.append(iter(curr.keys()))
+                                queue.append(iter(curr.values()))
+                                break
+                            elif isinstance(curr, ParaO):
+                                ret.append(curr)
+                        else:
+                            queue.pop()
+        return tuple(ret)
 
 
 class TypedAlias(GenericAlias):
