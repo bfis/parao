@@ -66,6 +66,10 @@ class Arg:
     def is_final(self):
         return self.offset >= len(self.key)
 
+    @property
+    def effective_key(self):
+        return self.key[self.offset :]
+
     def __gt__(self, other: "Arg | None") -> bool:
         return other is None or self.prio > other.prio
 
@@ -111,13 +115,14 @@ class Arg:
             return self.prio, self.val
         return 0, UNSET
 
-    def has_root(self, arg: "Arg") -> bool:
-        return (
+    def get_root_of(self, arg: "Arg") -> "Arg | None":
+        if (
             self.key is arg.key
             and self.val is arg.val
             and self.prio is arg.prio
             and self.offset <= arg.offset
-        )
+        ):
+            return self
 
 
 class Arguments(tuple["Arguments | Arg", ...]):
@@ -230,8 +235,10 @@ class Arguments(tuple["Arguments | Arg", ...]):
 
         return prio, cls
 
-    def has_root(self, arg: "Arg"):
-        return any(v.has_root(arg) for v in self)
+    def get_root_of(self, arg: "Arg") -> "Arg | None":
+        for a in self:
+            if r := a.get_root_of(arg):
+                return r
 
 
 Arguments.EMPTY = Arguments()
@@ -489,9 +496,9 @@ class Expansion[T](BaseException):
 
     def __init__(self, values: Iterable[T]):
         super().__init__()
-        iter(values)  # ensure values is iterable
+        assert iter(values)  # ensure values is iterable
         self.values = values
-        self._frames = []
+        self._frames: list[tuple[ParaOMeta, Param, Arg | None]] = []
 
     _get: Callable[[Arg], T | Self]
 
@@ -522,11 +529,7 @@ class Expansion[T](BaseException):
             return  # this will add ._get
         # keep track of key to dial-down to the origin
         self._frames.append(
-            (
-                inst.__class__,
-                param,
-                inst.__args__.has_root(self.arg),
-            )
+            (inst.__class__, param, inst.__args__.get_root_of(self.arg))
         )
         raise  # self # but don't to avoid mangling the traceback
 
@@ -552,16 +555,12 @@ class Expansion[T](BaseException):
             )
 
         rkey = []
-        if use_arg:
-            rkey.extend(reversed(self.arg.key))
-        for cls, param, has_arg_root in self._frames:
-            if use_arg:
-                if has_arg_root:
-                    continue
-                else:
-                    use_arg = False
+        for cls, param, root in self._frames:
+            if use_arg and root is not None:
+                rkey = list(root.effective_key[::-1])
+                continue
 
-            name = param._solve_name(param, cls)
+            name = _solve_name(param, cls)
 
             if (
                 use_param
@@ -611,8 +610,7 @@ class Expansion[T](BaseException):
 
     def __repr__(self):
         parts = [f"< {safe_len(self.values)} values >"]
-        if self.param:
+        if self._frames:
             parts.append(f"param={self.param}")
-        if self.source:
             parts.append(f"source={self.source}")
         return f"{self.__class__.__name__}({', '.join(parts)})"

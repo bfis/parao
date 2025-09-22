@@ -262,6 +262,8 @@ class TestParaO(TestCase):
                 self.assertEqual(exp.param_name, "bar")
                 self.assertEqual(exp.values, (1, 2, 3))
 
+        self.assertEqual(repr(Expansion([1, 2, 3])), "Expansion(< 3 values >)")
+
     def test_collect(self):
 
         class Foo(ParaO):
@@ -326,6 +328,24 @@ class TestParaO(TestCase):
             )
             self.assertSequenceEqual(
                 list(map(attrgetter("foo.bar"), Wrap2(bar=[1, 2, 3]).mid.expand())),
+                [1, 2, 3],
+            )
+            self.assertSequenceEqual(
+                list(
+                    map(
+                        attrgetter("foo.bar"),
+                        Wrap2({("foo", "bar"): [1, 2, 3]}).mid.expand(),
+                    )
+                ),
+                [1, 2, 3],
+            )
+            self.assertSequenceEqual(
+                list(
+                    map(
+                        attrgetter("foo.bar"),
+                        Wrap2({("mid", "foo", "bar"): [1, 2, 3]}).mid.expand(),
+                    )
+                ),
                 [1, 2, 3],
             )
             self.assertSequenceEqual(
