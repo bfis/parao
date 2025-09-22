@@ -211,37 +211,50 @@ class HasArguments(Protocol):
 
 eager = ContextValue[bool]("eager", default=False)
 
-_own_parameters_cache = {}
+
+class _OwnParameters(dict[str, "AbstractParam"]):
+    __slots__ = "vals"
+    vals: set["AbstractParam"]
+
+    def __init__(self, cls: "ParaOMeta"):
+        super().__init__(
+            (name, param)
+            for name in dir(cls)
+            if not name.startswith("__")
+            and isinstance((param := getattr(cls, name)), AbstractParam)
+        )
+        self.vals = set(self.values())
+
+    cache: dict["ParaOMeta", "_OwnParameters"] = {}
 
 
 class ParaOMeta(type):
     @property
-    def __own_parameters__(cls) -> "dict[str, AbstractParam]":
-        if (val := _own_parameters_cache.get(cls)) is None:
-            val = _own_parameters_cache[cls] = {
-                name: param
-                for name, param in vars(cls).items()
-                if not name.startswith("__") and isinstance(param, AbstractParam)
-            }
+    def __own_parameters__(cls) -> _OwnParameters:
+        if (val := _OwnParameters.cache.get(cls)) is None:
+            val = _OwnParameters.cache[cls] = _OwnParameters(cls)
         return val
 
     def __setattr__(cls, name, value):
         if not name.startswith("__"):
-            if cache := _own_parameters_cache.get(cls):
+            if cache := _OwnParameters.cache.get(cls):
                 if old := cache.get(name):
                     old.__set_name__(cls, None)
+                    cache.vals.remove(old)
                     del cache[name]
             if isinstance(value, AbstractParam):
                 value.__set_name__(cls, name)
                 if cache:
+                    cache.vals.add(value)
                     cache[name] = value
         return super().__setattr__(name, value)
 
     def __delattr__(cls, name):
         if not name.startswith("__"):
-            if cache := _own_parameters_cache.get(cls):
+            if cache := _OwnParameters.cache.get(cls):
                 if old := cache.get(name):
                     old.__set_name__(cls, None)
+                    cache.vals.remove(old)
                     del cache[name]
         return super().__delattr__(name)
 
