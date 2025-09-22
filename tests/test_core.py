@@ -6,10 +6,12 @@ from parao.core import (
     AbstractParam,
     Arg,
     Arguments,
+    Const,
     Expansion,
     ParaO,
     Param,
     MissingParameterValue,
+    Prop,
     Unset,
     UntypedParameter,
     eager,
@@ -129,6 +131,24 @@ class TestParam(TestCase):
 
             class BadTypeVarParam[Q, T](AbstractParam[T]):
                 pass
+
+    def test_specialized(self):
+        uniq_const = object()
+        uniq_aux = object()
+        uniq_return = object()
+        uniq_override = object()
+
+        class Special(ParaO):
+            const = Const(uniq_const)
+
+            @Prop(aux=uniq_aux)
+            def prop(self):
+                return uniq_return
+
+        self.assertIs(Special(const=None).const, uniq_const)
+        self.assertIs(Special.prop.aux, uniq_aux)
+        self.assertIs(Special().prop, uniq_return)
+        self.assertIs(Special(prop=uniq_override).prop, uniq_override)
 
 
 class TestParaO(TestCase):

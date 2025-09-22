@@ -23,7 +23,7 @@ from os.path import dirname
 from .cast import cast, Opaque
 from .misc import ContextValue, safe_len, safe_repr
 
-__all__ = ["UNSET", "ParaO", "Param"]
+__all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
 _warn_skip = (dirname(__file__),)
 
 
@@ -373,6 +373,8 @@ def _get_type_hints(cls: "ParaOMeta"):
 
 ### actual code
 class AbstractParam[T]:
+    significant: bool = True
+
     def __class_getitem__(cls, key):
         return TypedAlias.convert(super().__class_getitem__(key))
 
@@ -462,6 +464,39 @@ class AbstractParam[T]:
     collect: ExpansionFilter = ()
     type: type | Unset
     type = UNSET
+
+
+class Const[T](AbstractParam[T]):
+    def __init__(self, value: T, **kwargs):
+        super().__init__(value=value, **kwargs)
+
+    def __get__(self, instance, owner=None) -> T:
+        return self.value
+
+
+class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
+    def __init__(self, func: F, **kwargs):
+        assert callable(func)
+        super().__init__(func=func, **kwargs)
+
+    def __new__(cls, func: F | None = None, **kwargs):
+        if func is None:
+            return partial(cls, **kwargs)
+        return super().__new__(cls)
+
+    func: F
+
+
+class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
+    def _solve_type(self, cls, name):
+        typ = self.func.__annotations__.get("return", UNSET)
+        if typ is UNSET:
+            typ = super()._solve_type(cls, name)
+        return typ
+
+    def _get(self, val, name, instance) -> T:
+        val = super()._get(val, name, instance)
+        return self.func(instance) if val is UNSET else val
 
 
 class MissingParameterValue(TypeError): ...
