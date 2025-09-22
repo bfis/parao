@@ -10,6 +10,7 @@ import sys
 from typing import get_origin
 from warnings import warn
 
+from .action import Plan
 from .cast import cast
 from .core import AbstractParam, Arg, Arguments, Expansion, ParaO, ParaOMeta, eager
 from .misc import PeekableIter, is_subseq
@@ -290,7 +291,7 @@ class CLI:
 
     def parse_args(self, args: list[str]):
         pre: list[str] = []
-        got: list[tuple[ParaOMeta, Arguments]] = []
+        got: list[tuple[ParaOMeta, Arguments, list[str]]] = []
 
         typ: type = None
         raw: list[str] = None
@@ -380,11 +381,14 @@ class CLI:
             for item in got:
                 yield from consume(*item)
 
-    def run(self, args: list[str] | None = None):
+    def run(self, args: list[str] | None = None, **kwargs):
         if args is None:
             args = sys.argv[1:]
 
-        return list(self._run(args))
+        kwargs.setdefault("run", True)
+
+        with Plan().use(**kwargs):
+            return list(self._run(args))
 
 
 if __name__ == "__main__":
