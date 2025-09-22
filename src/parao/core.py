@@ -23,7 +23,13 @@ from .misc import ContextValue, safe_len, safe_repr
 __all__ = ["UNSET", "ParaO", "Param"]
 _warn_skip = (dirname(__file__),)
 
-UNSET = Opaque()
+
+class Unset(Opaque): ...
+
+
+UNSET = Unset()
+
+Unset.__new__ = lambda _: UNSET
 
 _param_counter = count()
 
@@ -381,7 +387,7 @@ class AbstractParam[T]:
     min_prio: float = -inf
     eager: bool = True
     collect: ExpansionFilter = ()
-    type: type  # | UNSET
+    type: type | Unset
     type = UNSET
 
 

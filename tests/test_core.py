@@ -2,12 +2,14 @@ from operator import attrgetter
 from unittest import TestCase
 from unittest.mock import Mock
 from parao.core import (
+    UNSET,
     Arg,
     Arguments,
     Expansion,
     ParaO,
     Param,
     MissingParameterValue,
+    Unset,
     UntypedParameter,
     eager,
     DuplicateParameter,
@@ -16,6 +18,13 @@ from parao.core import (
 
 
 uniq_object = object()
+
+
+class TestUnset(TestCase):
+    def test(self):
+        self.assertIsInstance(UNSET, Unset)
+        self.assertIs(UNSET, Unset())
+        self.assertIs(Unset(), Unset())
 
 
 class TestArg(TestCase):
