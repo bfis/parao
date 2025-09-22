@@ -101,7 +101,7 @@ class TestArguments(TestCase):
 
     def test_repr(self):
 
-        self.assertEqual(repr(Arguments.make()), "Arguments()")
+        self.assertEqual(repr(Arguments.make({})), "Arguments()")
         self.assertEqual(
             repr(Arguments.make(key=123)),
             "Arguments(Arg('key', val=123),)",
@@ -142,7 +142,7 @@ class TestParam(TestCase):
             const = Const(uniq_const)
 
             @Prop(aux=uniq_aux)
-            def prop(self):
+            def prop(self) -> object:
                 return uniq_return
 
         self.assertIs(Special(const=None).const, uniq_const)
@@ -400,7 +400,7 @@ class TestParaO(TestCase):
             in3u = Param[In](significant=False)
 
             @Prop
-            def in3(self):
+            def in3(self) -> dict:
                 return {
                     "deep": [
                         "nested",
