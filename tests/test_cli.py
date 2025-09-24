@@ -17,7 +17,7 @@ from parao.cli import (
 from parao.core import MissingParameterValue, ParaO, Param
 
 
-class Test1(ParaO):
+class Outer1(ParaO):
     class Inner(ParaO):
         foo = Param[int](2)
         boo = Param[str]("inner")
@@ -27,11 +27,7 @@ class Test1(ParaO):
     boo = Param[bool](False)
 
 
-class TestCLI1sub(Test1):
-    extra = Param[complex](0)
-
-
-class Test2(ParaO):
+class Outer2(ParaO):
     class Inner(ParaO):
         pass
 
@@ -42,30 +38,30 @@ class Test2(ParaO):
     bar = Param[str]()
 
 
-class Test3(ParaO):
+class Outer3(ParaO):
     class Inner2(ParaO):
         pass
 
 
-Test3.__module__ += ".sub"
-Test3.Inner2.__module__ += ".sub"
+Outer3.__module__ += ".sub"
+Outer3.Inner2.__module__ += ".sub"
 
 plain_object = object()
 
 
 class TestCLI(TestCase):
     def test_argv(self):
-        argv = ["<script>", "Test1"]
+        argv = ["<script>", "Outer1"]
         with patch("sys.argv", argv):
             self.assertEqual(sys.argv, argv)
-            self.assertIsInstance(CLI().run()[0], Test1)
+            self.assertIsInstance(CLI().run()[0], Outer1)
 
     def test_plain(self):
         cli = CLI()
 
-        a, b = cli.run(["Test1", "Test1.Inner"])
-        self.assertIsInstance(a, Test1)
-        self.assertIsInstance(b, Test1.Inner)
+        a, b = cli.run(["Outer1", "Outer1.Inner"])
+        self.assertIsInstance(a, Outer1)
+        self.assertIsInstance(b, Outer1.Inner)
         with self.assertRaises(ParaONotFound, msg="DoesNotExist"):
             cli.run(["DoesNotExist"])
         with self.assertWarns(AmbigouusCandidate):
@@ -75,65 +71,65 @@ class TestCLI(TestCase):
         self.assertRaises(
             ModuleNotFoundError, lambda: cli.run(["does_not_exist.Inner2"])
         )
-        self.assertIsInstance(cli.run(["sub.Inner2"])[0], Test3.Inner2)
+        self.assertIsInstance(cli.run(["sub.Inner2"])[0], Outer3.Inner2)
         with self.assertRaises(NotAParaO):
             cli.run(["tests.test_cli:plain_object"])
 
     def test_params(self):
         cli = CLI()
 
-        self.assertEqual(cli.run(["Test1", "--foo", "123"])[0].foo, 123)
-        self.assertEqual(cli.run(["Test1", "--foo=123"])[0].foo, 123)
-        self.assertEqual(cli.run(["Test1", "--Test1.foo=123"])[0].foo, 123)
+        self.assertEqual(cli.run(["Outer1", "--foo", "123"])[0].foo, 123)
+        self.assertEqual(cli.run(["Outer1", "--foo=123"])[0].foo, 123)
+        self.assertEqual(cli.run(["Outer1", "--Outer1.foo=123"])[0].foo, 123)
         # various empties
-        self.assertEqual(cli.run(["Test1", "--bar="])[0].bar, "")
-        self.assertEqual(cli.run(["Test1", "--boo"])[0].boo, True)
-        self.assertEqual(cli.run(["Test1", "--boo", "--bar=b"])[0].boo, True)
+        self.assertEqual(cli.run(["Outer1", "--bar="])[0].bar, "")
+        self.assertEqual(cli.run(["Outer1", "--boo"])[0].boo, True)
+        self.assertEqual(cli.run(["Outer1", "--boo", "--bar=b"])[0].boo, True)
         # json
-        self.assertEqual(len(cli.run(["Test1", "--foo;json", "[1,2,3]"])), 3)
+        self.assertEqual(len(cli.run(["Outer1", "--foo;json", "[1,2,3]"])), 3)
         with self.assertRaises(JSONDecodeError):
-            cli.run(["Test1", "--foo;json=]"])
+            cli.run(["Outer1", "--foo;json=]"])
         # with module
-        self.assertEqual(cli.run(["Test1", "--test_cli.Test1.foo=123"])[0].foo, 123)
-        self.assertEqual(cli.run(["Test1", "--test_cli:Test1.foo=123"])[0].foo, 123)
+        self.assertEqual(cli.run(["Outer1", "--test_cli.Outer1.foo=123"])[0].foo, 123)
+        self.assertEqual(cli.run(["Outer1", "--test_cli:Outer1.foo=123"])[0].foo, 123)
         with self.assertRaises(ModuleNotFoundError):
-            cli.run(["Test1", "--test_cli:bad.Test1.foo=123"])
-        self.assertEqual(cli.run(["Test1", "--not_found.foo=123"])[0].foo, 1)
+            cli.run(["Outer1", "--test_cli:bad.Outer1.foo=123"])
+        self.assertEqual(cli.run(["Outer1", "--not_found.foo=123"])[0].foo, 1)
         self.assertEqual(
-            cli.run(["Test1", "--tests.test_cli:Test1.foo=123"])[0].foo, 123
+            cli.run(["Outer1", "--tests.test_cli:Outer1.foo=123"])[0].foo, 123
         )
         with self.assertRaises(MalformedCommandline):
-            cli.run(["Test1", "--tests.test_cli:=123"])
+            cli.run(["Outer1", "--tests.test_cli:=123"])
         with self.assertWarns(UnsupportedKeyType):
-            cli.run(["Test1", "--tests.test_cli:plain_object=123"])
+            cli.run(["Outer1", "--tests.test_cli:plain_object=123"])
 
     def test_prio(self):
         cli = CLI()
-        self.assertEqual(cli.run(["Test1", "-foo=9", "-foo=1"])[0].foo, 1)
-        self.assertEqual(cli.run(["Test1", "+foo=9", "-foo=1"])[0].foo, 9)
-        self.assertEqual(cli.run(["Test1", "-+foo=9", "-foo=1"])[0].foo, 9)
-        self.assertEqual(cli.run(["Test1", "-foo;prio:=9", "-foo=1"])[0].foo, 1)
-        self.assertEqual(cli.run(["Test1", "-foo;prio:1=9", "-foo=1"])[0].foo, 9)
-        self.assertEqual(cli.run(["Test1", "-foo;prio:1.1=9", "-foo=1"])[0].foo, 9)
+        self.assertEqual(cli.run(["Outer1", "-foo=9", "-foo=1"])[0].foo, 1)
+        self.assertEqual(cli.run(["Outer1", "+foo=9", "-foo=1"])[0].foo, 9)
+        self.assertEqual(cli.run(["Outer1", "-+foo=9", "-foo=1"])[0].foo, 9)
+        self.assertEqual(cli.run(["Outer1", "-foo;prio:=9", "-foo=1"])[0].foo, 1)
+        self.assertEqual(cli.run(["Outer1", "-foo;prio:1=9", "-foo=1"])[0].foo, 9)
+        self.assertEqual(cli.run(["Outer1", "-foo;prio:1.1=9", "-foo=1"])[0].foo, 9)
         with self.assertRaises(ValueError):
-            cli.run(["Test1", "-foo;prio:x=9"])
+            cli.run(["Outer1", "-foo;prio:x=9"])
 
     def test_unused_arguments(self):
         cli = CLI()
         self.assertEqual(cli.run([]), [])
-        cli.run(["", "Test1", ""])
+        cli.run(["", "Outer1", ""])
         with self.assertWarns(UnusedCLIArguments):
-            cli.run(["--foo", "Test1"])
+            cli.run(["--foo", "Outer1"])
         with self.assertWarns(UnusedCLIArguments):
-            cli.run(["Test1", "--", "--foo"])
+            cli.run(["Outer1", "--", "--foo"])
 
     def test_errors(self):
-        self.assertRaises(MissingParameterValue, lambda: CLI().run(["Test2"]))
+        self.assertRaises(MissingParameterValue, lambda: CLI().run(["Outer2"]))
         self.assertRaises(
-            MissingParameterValue, lambda: CLI().run(["Test2", "-foo", "1"])
+            MissingParameterValue, lambda: CLI().run(["Outer2", "-foo", "1"])
         )
         self.assertRaises(
-            MissingParameterValue, lambda: CLI().run(["Test2", "-foo", "1,2"])
+            MissingParameterValue, lambda: CLI().run(["Outer2", "-foo", "1,2"])
         )
 
 

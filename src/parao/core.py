@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from functools import cached_property, lru_cache, partial
 from itertools import count
 from math import inf
+from os.path import dirname
 from types import GenericAlias
 from typing import (
     Any,
@@ -18,10 +19,10 @@ from typing import (
     get_type_hints,
 )
 from warnings import warn
-from os.path import dirname
 
-from .cast import cast, Opaque
+from .cast import Opaque, cast
 from .misc import ContextValue, safe_len, safe_repr
+from .shash import _SHash, bin_hash
 
 __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
 _warn_skip = (dirname(__file__),)
@@ -31,6 +32,7 @@ class Unset(Opaque): ...
 
 
 UNSET = Unset()
+UNSET.__shash__ = _SHash().coll(Unset, (), None)
 
 Unset.__new__ = lambda _: UNSET
 
@@ -322,6 +324,25 @@ class ParaOMeta(type):
 class ParaO(metaclass=ParaOMeta):
     __args__: Arguments  # | UNSET
 
+    def __shash__(self, enc: _SHash) -> bytes:
+        if (res := getattr(self, "__shash", None)) is None:
+            res = self.__shash = enc.coll(
+                self.__class__,
+                (
+                    (name, vhash)
+                    for name, param in self.__class__.__own_parameters__.items()
+                    if param.significant
+                    and (value := getattr(self, name)) is not param.neutral
+                    and (vhash := enc(value)) != enc(param.neutral)
+                ),
+                enc.keyh,
+                True,
+            )
+        return res
+
+    def __hash__(self) -> int:
+        return int.from_bytes(bin_hash(self)[:8])
+
     @cached_property
     def __inner__(self) -> tuple["ParaO", ...]:
         ret = []
@@ -401,6 +422,7 @@ def _get_type_hints(cls: "ParaOMeta"):
 ### actual code
 class AbstractParam[T]:
     significant: bool = True
+    neutral: T = None
 
     def __class_getitem__(cls, key):
         return TypedAlias.convert(super().__class_getitem__(key))

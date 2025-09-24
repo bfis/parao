@@ -141,8 +141,10 @@ class TestParam(TestCase):
         class Special(ParaO):
             const = Const(uniq_const)
 
+            prop: object
+
             @Prop(aux=uniq_aux)
-            def prop(self) -> object:
+            def prop(self):
                 return uniq_return
 
         self.assertIs(Special(const=None).const, uniq_const)
@@ -386,28 +388,6 @@ class TestParaO(TestCase):
             )
 
     def test_inner(self):
-        class In(ParaO):
-            exp = Param[int](0)
-
-            @Prop
-            def uniq(self) -> int:
-                return id(self)
-
-        class Out(ParaO):
-            in1 = Param[In](collect=[In.exp])
-            in2 = Param[list[In]]([])
-
-            in3u = Param[In](significant=False)
-
-            @Prop
-            def in3(self) -> dict:
-                return {
-                    "deep": [
-                        "nested",
-                        ("structure", {"with", frozenset({"some", (self.in3u,) * 2})}),
-                    ]
-                }
-
         out1 = Out()
         self.assertEqual(out1.__inner__, (out1.in1, *out1.in2, out1.in3u, out1.in3u))
 
@@ -419,3 +399,27 @@ class TestParaO(TestCase):
         self.assertEqual(out3.__inner__[0].exp, 1)
         self.assertEqual(out3.__inner__[1].exp, 2)
         self.assertEqual(out3.__inner__[2:], (out3.in3u, out3.in3u))
+
+
+class In(ParaO):
+    exp = Param[int](0)
+
+    @Prop
+    def uniq(self) -> int:
+        return id(self)
+
+
+class Out(ParaO):
+    in1 = Param[In](collect=[In.exp])
+    in2 = Param[list[In]]([])
+
+    in3u = Param[In](significant=False)
+
+    @Prop
+    def in3(self) -> dict:
+        return {
+            "deep": [
+                "nested",
+                ("structure", {"with", frozenset({"some", (self.in3u,) * 2})}),
+            ]
+        }
