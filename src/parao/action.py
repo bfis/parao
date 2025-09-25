@@ -41,10 +41,15 @@ class Act[T, R](partial):
 
 
 class Action[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
+    _act_cls: type[Act] = Act
     significant = False
 
     def _get(self, val, name, instance) -> Act[T, R]:
-        return Plan.add(self, instance, super()._get(val, name, instance))
+        val = super()._get(val, name, instance)
+        act = self._act_cls(self, instance, val)
+        if val is not UNSET:
+            Plan.add(act)
+        return act
 
     __get__: Callable[..., Act[T, R] | Expansion]
 
@@ -61,8 +66,11 @@ class MissingParameterValueOrOverride(MissingParameterValue): ...
 
 
 class ValueAction[T, R](Action[T, R, T]):
-    def _solve_type(self, cls, name):
-        return _method_1st_arg_annotation(self.func)
+    def _type(self, cls, name):
+        typ = self.type
+        if typ is UNSET:
+            typ = _method_1st_arg_annotation(self.func)
+        return typ
 
     __get__: Callable[..., Act[T, R] | Expansion]
 
@@ -70,7 +78,7 @@ class ValueAction[T, R](Action[T, R, T]):
         if override is not UNSET:
             value = override
         if value is UNSET:
-            raise MissingParameterValueOrOverride(self._solve_name(inst))
+            raise MissingParameterValueOrOverride(self._name(type(inst)))
         return self.func(inst, value)
 
 
@@ -79,7 +87,7 @@ class RecursiveAction(Action[int | bool | None, None, [int, Iterable[Act]]]):
     _func: Callable[[ParaO, int, Iterable[Act]], Iterable[Act] | None] | None = None
 
     def _solve_inner(self, inst: ParaO) -> Iterable[Act]:
-        name = self._solve_name(inst)
+        name = self._name(type(inst))
         cls = type(self)
         for inner in inst.__inner__:
             if other := inner.__class__.__own_parameters__.get(name):
@@ -121,11 +129,9 @@ class Plan(list[Act]):
     current = ContextValue["Plan"]("currentActionPlan", default=None)
 
     @classmethod
-    def add(cls, action: Action, inst: ParaO, value: Any | Unset) -> Act:
-        act = Act(action, inst, value)
-        if value is not UNSET and (curr := cls.current()) is not None:
+    def add(cls, act: Act):
+        if (curr := cls.current()) is not None:
             curr.append(act)
-        return act
 
     @contextmanager
     def use(self, /, run: bool = False):

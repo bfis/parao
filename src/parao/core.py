@@ -448,13 +448,17 @@ class AbstractParam[T]:
             del self._owner2name[cls]
         _solve_name.cache_clear()
 
-    def _solve_name(self, instance: "ParaO"):
-        return _solve_name(self, type(instance))
+    def _name(self, cls: "ParaOMeta"):
+        return _solve_name(self, cls)
 
-    def _solve_type(self, cls: "ParaOMeta", name: str):
-        return _get_type_hints(cls).get(name, UNSET)
+    def _type(self, cls: "ParaOMeta", name: str):
+        typ = self.type
+        if typ is UNSET:
+            typ = _get_type_hints(cls).get(name, UNSET)
+        return typ
 
     def _cast(self, val, typ):
+
         if typ is not UNSET:
             try:
                 exp = cast(val, Expansion[typ])
@@ -466,9 +470,7 @@ class AbstractParam[T]:
         return cast(val, typ)
 
     def _get(self, val: Any, name: str, instance: "ParaO") -> T:
-        typ = self.type
-        if typ is UNSET:
-            typ = self._solve_type(type(instance), name)
+        typ = self._type(type(instance), name)
         if typ is UNSET:
             warn(
                 f"{type(self)} {name} on {type(instance)}",
@@ -478,7 +480,14 @@ class AbstractParam[T]:
             return val
         return self._cast(val, typ)
 
-    def __get(
+    def _collect(self, expansion: "Expansion", instance: "ParaO"):
+        return bool(self.collect) and (
+            self.collect(expansion, instance)
+            if callable(self.collect)
+            else any(map(expansion.test, self.collect))
+        )
+
+    def _solve(
         self,
         arg: Arg | None,
         name: str,
@@ -492,7 +501,7 @@ class AbstractParam[T]:
                 return self._get(val, name, instance)
         except Expansion as exp:
             exp.process(self, instance, arg)
-            exp._get = partial(self.__get, arg, name, instance, *args)
+            exp.make = partial(self._solve, arg, name, instance, *args)
             return exp
         except Exception as exc:
             exc.add_note(f"parameter {name}={safe_repr(self)} on {safe_repr(instance)}")
@@ -501,11 +510,12 @@ class AbstractParam[T]:
     def __get__(self, instance: "ParaO", owner: type | None = None):
         if instance is None:
             return self
-        name = self._solve_name(instance)
+        cls = type(instance)
+        name = self._name(cls)
 
-        arg, sub = instance.__args__.solve_value(self, type(instance), name)
+        arg, sub = instance.__args__.solve_value(self, cls, name)
 
-        instance.__dict__[name] = val = self.__get(arg, name, instance, sub)
+        instance.__dict__[name] = val = self._solve(arg, name, instance, sub)
         return val
 
     min_prio: float = -inf
@@ -537,10 +547,10 @@ class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
 
 
 class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
-    def _solve_type(self, cls, name):
+    def _type(self, cls, name):
         typ = self.func.__annotations__.get("return", UNSET)
         if typ is UNSET:
-            typ = super()._solve_type(cls, name)
+            typ = super()._type(cls, name)
         return typ
 
     def _get(self, val, name, instance) -> T:
@@ -584,14 +594,14 @@ class Expansion[T](BaseException):
         self.values = values
         self._frames: list[tuple[ParaOMeta, Param, Arg | None]] = []
 
-    _get: Callable[[Arg], T | Self]
+    make: Callable[[Arg], T | Self] | None = None
 
     def test(self, item: KeyE | Iterable[KeyE]):
         match item:
             case AbstractParam():
                 return self.param is item
             case str():
-                return self.param_name == item
+                return bool(self.param_name == item)
             case type():
                 return isinstance(self.source, item)
             case _:
@@ -605,11 +615,7 @@ class Expansion[T](BaseException):
             # do we need these? or are they only for _unwind construction
             self.arg = arg
         # is it collected here?
-        if param.collect and (
-            param.collect(self, inst)
-            if callable(param.collect)
-            else any(map(self.test, param.collect))
-        ):
+        if param._collect(self, inst):
             return  # this will add ._get
         # keep track of key to dial-down to the origin
         self._frames.append(
@@ -670,7 +676,7 @@ class Expansion[T](BaseException):
     def expand(self, prio: PrioT = 0, **kwargs) -> Generator[T]:
         key = self.make_key(**kwargs)
         for val in self.values:
-            res = self._get(Arg(key, val, prio))
+            res = self.make(Arg(key, val, prio))
             if isinstance(res, Expansion):
                 yield from res.expand(prio=prio, **kwargs)
             else:
@@ -681,7 +687,7 @@ class Expansion[T](BaseException):
         try:
             yield typ(args)
         except Expansion as exp:
-            exp._get = lambda arg: typ(Arguments((args, arg)))
+            exp.make = lambda arg: typ(Arguments((args, arg)))
             try:
                 yield from exp.expand(**kwargs)
             except Exception as exc:
@@ -690,7 +696,7 @@ class Expansion[T](BaseException):
 
     @property
     def param_name(self):
-        return self.param._solve_name(self.source)
+        return self.param._name(type(self.source))
 
     def __repr__(self):
         parts = [f"< {safe_len(self.values)} values >"]
