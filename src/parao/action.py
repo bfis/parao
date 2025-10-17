@@ -1,18 +1,18 @@
 from contextlib import contextmanager
-from functools import lru_cache, partial
+from functools import lru_cache
 from inspect import Parameter, signature
-from typing import Any, Callable, Concatenate, Iterable, Type
+from typing import Any, Callable, Concatenate, Iterable, Self, Type
 
 from .core import (
     UNSET,
     AbstractDecoParam,
-    Expansion,
-    MissingParameterValue,
     ParaO,
     Unset,
     eager,
 )
 from .misc import ContextValue
+
+__all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
 
 
 @lru_cache
@@ -21,115 +21,143 @@ def _method_1st_arg_annotation[T](
 ) -> Type[T] | Unset:
     for i, param in enumerate(signature(func).parameters.values()):
         if i == 1:
-            if (
-                param.kind
-                in (
-                    Parameter.POSITIONAL_ONLY,
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                    Parameter.VAR_POSITIONAL,
-                )
-                and param.annotation is not Parameter.empty
+            if param.kind in (
+                Parameter.POSITIONAL_ONLY,
+                Parameter.POSITIONAL_OR_KEYWORD,
+                Parameter.VAR_POSITIONAL,
             ):
-                return param.annotation
+                if param.annotation is Parameter.empty:
+                    return UNSET
+                else:
+                    return param.annotation
             break
     return UNSET
 
 
-class Act[T, R](partial):
-    func: "Action[T, R]"
-    args: tuple[ParaO, T]
+class BaseAct[T, A: "BaseAction"]:
+    __slots__ = ("action", "instance", "value")
+
+    def __init__(self, action: A, instance: ParaO, value: T):
+        self.action = action
+        self.instance = instance
+        self.value = value
+        self._add()
+
+    def _add(self):
+        if self.value is not UNSET:
+            Plan.add(self)
+
+    @property
+    def name(self) -> str:
+        return self.action._name(self.instance.__class__)
+
+    __call__: Callable
 
 
-class Action[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
-    _act_cls: type[Act] = Act
+class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
     significant = False
+    _act: Type[BaseAct] = BaseAct
 
-    def _get(self, val, name, instance) -> Act[T, R]:
+    def _type(self, cls, name):
+        return self.type
+
+    def _get(self, val, name, instance) -> BaseAct:
         val = super()._get(val, name, instance)
-        act = self._act_cls(self, instance, val)
-        if val is not UNSET:
-            Plan.add(act)
-        return act
+        return self._act(self, instance, val)
 
-    __get__: Callable[..., Act[T, R] | Expansion]
+    def _collect(self, expansion, instance):  # can't collect
+        return False  # pragma: no cover
 
-    def __call__(
-        self, inst: ParaO, value: T | Unset, *args: Ps.args, **kwargs: Ps.kwargs
-    ):
+    __get__: Callable[..., BaseAct[T, Self]]
+
+
+# simple variant
+class SimpleAct[R](BaseAct[bool, "SimpleAction[R]"]):
+    def _add(self):
+        if self.value:
+            Plan.add(self)
+
+    def __call__(self) -> R:
+        return self.action.func(self.instance)
+
+
+class SimpleAction[R](BaseAction[bool, R, []]):
+    _act = SimpleAct
+    func: Callable[[ParaO], R]
+    __get__: Callable[..., SimpleAct[R]]
+    type = bool
+
+
+# value variant
+class ValueAct[T, R](BaseAct[T, "ValueAction[T, R]"]):
+    def __call__(self, override: T | Unset = UNSET) -> R:
+        value = self.value if override is UNSET else override
         if value is UNSET:
-            return self.func(inst, *args, **kwargs)
+            return self.action.func(self.instance)
         else:
-            return self.func(inst, value, *args, **kwargs)
+            return self.action.func(self.instance, value)
 
 
-class MissingParameterValueOrOverride(MissingParameterValue): ...
-
-
-class ValueAction[T, R](Action[T, R, T]):
+class ValueAction[T, R](BaseAction[T, R, [T]]):
     def _type(self, cls, name):
         typ = self.type
         if typ is UNSET:
             typ = _method_1st_arg_annotation(self.func)
         return typ
 
-    __get__: Callable[..., Act[T, R] | Expansion]
-
-    def __call__(self, inst: ParaO, value: T | Unset, override: T | Unset = UNSET):
-        if override is not UNSET:
-            value = override
-        if value is UNSET:
-            raise MissingParameterValueOrOverride(self._name(type(inst)))
-        return self.func(inst, value)
+    _act = ValueAct
+    func: Callable[[ParaO, T], R]
+    __get__: Callable[..., ValueAct[T, R]]
+    type: Type[T]
 
 
-class RecursiveAction(Action[int | bool | None, None, [int, Iterable[Act]]]):
-    func: Callable[[ParaO, int, Iterable[Act]], Iterable[Act] | None]
-    _func: Callable[[ParaO, int, Iterable[Act]], Iterable[Act] | None] | None = None
-
-    def _solve_inner(self, inst: ParaO) -> Iterable[Act]:
-        name = self._name(type(inst))
-        cls = type(self)
-        for inner in inst.__inner__:
+# recursive variant
+class RecursiveAct(BaseAct[int | bool | None, "RecursiveAction"]):
+    def _inner(self):
+        name = self.name
+        cls = self.action.__class__
+        for inner in self.instance.__inner__:
             if other := inner.__class__.__own_parameters__.get(name):
                 if isinstance(other, cls):
                     yield getattr(inner, name)
 
+    def _func(self, sub: Iterable[Self], depth: int, outer: int):
+        if not self.action.func(self.instance, depth):
+            for s in sub:
+                s(depth=depth + 1, outer=outer)
+
     def __call__(
         self,
-        inst: ParaO,
-        value: int | bool | Unset = UNSET,
-        override: int | bool | Unset = UNSET,
+        override: int | bool | None = UNSET,
         *,
-        outer: int = True,
         depth: int = 0,
+        outer: int = True,
     ):
-        if override is not UNSET:
-            value = override
-        if value is UNSET:
-            value = outer
-        elif value is False or value < 0:
+        val = self.value if override is UNSET else override
+        if val is UNSET:
+            val = outer
+        elif val is False or val < 0:
             return
 
-        inner = self._solve_inner(inst) if value else ()
-
-        _func = self._func or self.func
-        ret = _func(inst, depth, inner)
-        if ret is None:
-            ret = inner
-
-        kwargs = dict(depth=depth + 1)
-        if value is not True and value > 0:
-            kwargs["outer"] = value - 1
-
-        for r in ret:
-            r(**kwargs)
+        return self._func(
+            self._inner() if val else (),
+            depth,
+            val is True or val < 1 or val - 1,
+        )
 
 
-class Plan(list[Act]):
-    current = ContextValue["Plan"]("currentActionPlan", default=None)
+class RecursiveAction(BaseAction[int | bool | None, bool, [int]]):
+    _act = RecursiveAct
+    func: Callable[[ParaO, int], bool]
+    __get__: Callable[..., RecursiveAct]
+    type = int | bool | None
+
+
+class Plan(list[BaseAct]):
+    current = ContextValue["Plan"]("currentPlan", default=None)
 
     @classmethod
-    def add(cls, act: Act):
+    def add(cls, act: BaseAct):
         if (curr := cls.current()) is not None:
             curr.append(act)
 

@@ -17,6 +17,7 @@ from typing import (
     TypeVar,
     _GenericAlias,
     get_type_hints,
+    overload,
 )
 from warnings import warn
 
@@ -537,6 +538,12 @@ class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
     def __init__(self, func: F, **kwargs):
         assert callable(func)
         super().__init__(func=func, **kwargs)
+
+    @overload
+    def __new__(cls: Self, func: None = None, **kwargs) -> partial[Self]: ...
+
+    @overload
+    def __new__(cls: Self, func: F = None, **kwargs) -> Self: ...
 
     def __new__(cls, func: F | None = None, **kwargs):
         if func is None:
