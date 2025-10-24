@@ -3,13 +3,7 @@ from functools import lru_cache
 from inspect import Parameter, signature
 from typing import Any, Callable, Concatenate, Iterable, Self, Type
 
-from .core import (
-    UNSET,
-    AbstractDecoParam,
-    ParaO,
-    Unset,
-    eager,
-)
+from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, eager
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
@@ -57,6 +51,8 @@ class BaseAct[T, A: "BaseAction"]:
 class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
     significant = False
     _act: Type[BaseAct] = BaseAct
+
+    TypedAlias.register(R, "return_type")
 
     def _type(self, cls, name):
         return self.type
@@ -112,7 +108,7 @@ class ValueAction[T, R](BaseAction[T, R, [T]]):
 
 
 # recursive variant
-class RecursiveAct(BaseAct[int | bool | None, "RecursiveAction"]):
+class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
     def _inner(self):
         name = self.name
         cls = self.action.__class__
@@ -128,13 +124,13 @@ class RecursiveAct(BaseAct[int | bool | None, "RecursiveAction"]):
 
     def __call__(
         self,
-        override: int | bool | None = UNSET,
+        override: int | bool | None = None,
         *,
         depth: int = 0,
         outer: int = True,
     ):
-        val = self.value if override is UNSET else override
-        if val is UNSET:
+        val = self.value if override is None else override
+        if val is UNSET or val is None:
             val = outer
         elif val is False or val < 0:
             return
@@ -146,11 +142,14 @@ class RecursiveAct(BaseAct[int | bool | None, "RecursiveAction"]):
         )
 
 
-class RecursiveAction(BaseAction[int | bool | None, bool, [int]]):
-    _act = RecursiveAct
+class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
+    type = int | bool | None
+
+
+class RecursiveAction(BaseRecursiveAction[bool, [int]]):
     func: Callable[[ParaO, int], bool]
     __get__: Callable[..., RecursiveAct]
-    type = int | bool | None
+    _act = RecursiveAct
 
 
 class Plan(list[BaseAct]):

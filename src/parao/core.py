@@ -15,11 +15,11 @@ from typing import (
     Protocol,
     Self,
     TypeVar,
-    _GenericAlias,
     get_type_hints,
     overload,
 )
 from warnings import warn
+from weakref import WeakKeyDictionary
 
 from .cast import Opaque, cast
 from .misc import ContextValue, safe_len, safe_repr
@@ -33,7 +33,8 @@ class Unset(Opaque): ...
 
 
 UNSET = Unset()
-UNSET.__shash__ = _SHash().coll(Unset, (), None)
+UNSET.__shash = _SHash().coll(Unset, (), None)
+UNSET.__shash__ = lambda _: UNSET.__shash
 
 Unset.__new__ = lambda _: UNSET
 
@@ -273,6 +274,10 @@ class _OwnParameters(dict[str, "AbstractParam"]):
 
 class ParaOMeta(type):
     @property
+    def __fullname__(cls):
+        return f"{cls.__module__}:{cls.__qualname__}"
+
+    @property
     def __own_parameters__(cls) -> _OwnParameters:
         if (val := _OwnParameters.cache.get(cls)) is None:
             val = _OwnParameters.cache[cls] = _OwnParameters(cls)
@@ -371,32 +376,93 @@ class ParaO(metaclass=ParaOMeta):
                             queue.pop()
         return tuple(ret)
 
+    def __repr__(self, *, compact: bool | str = False):
+        if compact:
+            if compact is True:
+                compact = "..."
+            items = [compact]
+        else:
+            items = [
+                f"{name}={value!r}"
+                for name, value, neutral in self.__rich_repr__()
+                if value != neutral
+            ]
+
+        return f"{self.__class__.__fullname__}({", ".join(items)})"
+
+    def __rich_repr__(self):
+        for name, param in self.__class__.__own_parameters__.items():
+            if param.significant and not isinstance(param, Const):
+                if (neutral := param.neutral) is UNSET:
+                    neutral = getattr(param, "default", UNSET)
+                yield name, getattr(self, name), neutral
+
 
 class TypedAlias(GenericAlias):
+    _typevar2name = WeakKeyDictionary[TypeVar, str]()  # shadowed on instances!
+
+    class TypedAliasMismatch(RuntimeWarning): ...
+
+    class TypedAliasClash(TypeError): ...
+
+    class TypedAliasRedefined(RuntimeWarning): ...
+
+    def __init__(self, *arg, **kwargs):
+        super().__init__()
+        cls = self.__class__
+        tv2n = cls._typevar2name
+        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
+            if name := tv2n.get(tp):
+                if isinstance(arg, TypeVar):
+                    if arg.__name__ != tp.__name__:
+                        warn(f"{arg} -> {tp}", cls.TypedAliasMismatch, stacklevel=4)
+                    cls.register(arg, name)
+
     def __call__(self, *args, **kwds):
-        kwds.setdefault("type", self.__args__[0])
+        tv2n = self.__class__._typevar2name
+        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
+            if name := tv2n.get(tp):
+                if not isinstance(arg, TypeVar):
+                    kwds.setdefault(name, arg)
         return super().__call__(*args, **kwds)
 
     @classmethod
-    def convert(cls, ga: _GenericAlias):
+    def convert(cls, ga: GenericAlias):
         return cls(ga.__origin__, ga.__args__)
 
     @classmethod
-    def init_subclass(cls, other: type):
-        if "type" in other.__dict__:
-            return
-        for ob in other.__orig_bases__:
+    def register(cls, tv: TypeVar, name: str):
+        if got := cls._typevar2name.get(tv):
+            if got != name:
+                raise cls.TypedAliasClash(f"{tv} wants {name!r} already got {got!r}")
+            else:
+                warn(str(tv), cls.TypedAliasRedefined, skip_file_prefixes=_warn_skip)
+        else:
+            cls._typevar2name[tv] = name
+
+    @classmethod
+    def init_subclass(cls, subcls: "type[AbstractParam]"):
+        for ob in reversed(subcls.__orig_bases__):
             if isinstance(ob, cls):
-                typ = ob.__args__[0]
-                if isinstance(typ, TypeVar):
-                    if other.__type_params__[:1] != ob.__args__[:1]:
-                        raise TypeError(f"first typevar of {other} must be {typ}")
-                else:
-                    setattr(other, "type", typ)
-                return
+                for arg, tp in zip(ob.__args__, ob.__origin__.__type_params__):
+                    if name := cls._typevar2name.get(tp):
+                        if not isinstance(arg, TypeVar) and not hasattr(subcls, name):
+                            setattr(subcls, name, arg)
 
 
-class UntypedParameter(RuntimeWarning): ...
+class UntypedWarning(RuntimeWarning):
+    @classmethod
+    def warn(cls, param: "AbstractParam", instance: "ParaO", name: str | None = None):
+        if name is None:
+            name = param._name(type(instance))
+        warn(
+            f"{type(param)} {name} on {type(instance)}",
+            category=cls,
+            skip_file_prefixes=_warn_skip,
+        )
+
+
+class UntypedParameter(UntypedWarning): ...
 
 
 type ExpansionFilter = Collection[KeyE | Collection[KeyE]] | Callable[
@@ -423,7 +489,9 @@ def _get_type_hints(cls: "ParaOMeta"):
 ### actual code
 class AbstractParam[T]:
     significant: bool = True
-    neutral: T = None
+    neutral: T = UNSET
+
+    TypedAlias.register(T, "type")
 
     def __class_getitem__(cls, key):
         return TypedAlias.convert(super().__class_getitem__(key))
@@ -473,11 +541,7 @@ class AbstractParam[T]:
     def _get(self, val: Any, name: str, instance: "ParaO") -> T:
         typ = self._type(type(instance), name)
         if typ is UNSET:
-            warn(
-                f"{type(self)} {name} on {type(instance)}",
-                category=UntypedParameter,
-                skip_file_prefixes=_warn_skip,
-            )
+            UntypedParameter.warn(self, instance, name)
             return val
         return self._cast(val, typ)
 
@@ -508,7 +572,7 @@ class AbstractParam[T]:
             exc.add_note(f"parameter {name}={safe_repr(self)} on {safe_repr(instance)}")
             raise
 
-    def __get__(self, instance: "ParaO", owner: type | None = None):
+    def __get__(self, instance: "ParaO", owner: type | None = None) -> T:
         if instance is None:
             return self
         cls = type(instance)
@@ -531,7 +595,7 @@ class Const[T](AbstractParam[T]):
         super().__init__(value=value, **kwargs)
 
     def __get__(self, instance, owner=None) -> T:
-        return self.value
+        return self if instance is None else self.value
 
 
 class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
@@ -550,12 +614,16 @@ class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
             return partial(cls, **kwargs)
         return super().__new__(cls)
 
+    def __getattr__(self, name):
+        if not name.startswith("_"):
+            return getattr(self.func, name)
+
     func: F
 
 
 class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
     def _type(self, cls, name):
-        typ = self.func.__annotations__.get("return", UNSET)
+        typ = getattr(self.func, "__annotations__", {}).get("return", UNSET)
         if typ is UNSET:
             typ = super()._type(cls, name)
         return typ
@@ -709,5 +777,5 @@ class Expansion[T](BaseException):
         parts = [f"< {safe_len(self.values)} values >"]
         if self._frames:
             parts.append(f"param={self.param}")
-            parts.append(f"source={self.source}")
+            parts.append(f"source={self.source.__repr__(compact=True)}")
         return f"{self.__class__.__name__}({', '.join(parts)})"

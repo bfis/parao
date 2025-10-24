@@ -12,6 +12,7 @@ from parao.core import (
     Param,
     MissingParameterValue,
     Prop,
+    TypedAlias,
     Unset,
     UntypedParameter,
     eager,
@@ -127,10 +128,19 @@ class TestParam(TestCase):
 
         self.assertIs(StrangeParam().type, Sentinel)
 
-        with self.assertRaises(TypeError):
+        with self.assertWarns(TypedAlias.TypedAliasRedefined):
 
-            class BadTypeVarParam[Q, T](AbstractParam[T]):
-                pass
+            class RedundantParam[T](AbstractParam[T]):
+                TypedAlias.register(T, TypedAlias._typevar2name[T])
+
+        with self.assertRaises(TypedAlias.TypedAliasClash):
+
+            class ClashingParam[T](AbstractParam[T]):
+                TypedAlias.register(T, "not" + TypedAlias._typevar2name[T])
+
+        with self.assertWarns(TypedAlias.TypedAliasMismatch):
+
+            class MismatchParam[R](AbstractParam[R]): ...
 
     def test_specialized(self):
         uniq_const = object()
