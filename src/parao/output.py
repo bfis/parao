@@ -1,6 +1,7 @@
 import json
 import pickle
 from dataclasses import KW_ONLY, dataclass
+from errno import EXDEV
 from io import FileIO
 from pathlib import Path
 from shutil import copy2, copytree, rmtree
@@ -18,7 +19,7 @@ type Pickle[T] = T
 
 
 class FSOutput(Path, PseudoOutput):
-    file: None | FileIO = None
+    tmpio: None | FileIO = None
     _temp: None | TemporaryDirectory = None
 
     def __init__(self, path, *paths):
@@ -42,6 +43,10 @@ class FSOutput(Path, PseudoOutput):
         ret._temp = tmp
         return ret
 
+    def close(self):
+        if (f := self.tmpio) is not None and not f.closed:
+            f.close()
+
 
 class Dir(FSOutput):
     @classmethod
@@ -54,12 +59,15 @@ class File(FSOutput):
     def temp(cls, mode: str = "wb", **kwargs):
         tmp = NamedTemporaryFile(mode, **kwargs)
         ret = cls(tmp.name)
-        ret.file = tmp.file
+        ret.tmpio = tmp.file
         ret._closer = tmp._closer
         return ret
 
 
 class UntypedOuput(UntypedWarning): ...
+
+
+class MoveAcrossFilesystem(RuntimeWarning): ...
 
 
 class MissingOuput(FileNotFoundError): ...
@@ -102,7 +110,8 @@ class Coder[T]:
         if (have := self.is_dir) != (want := data.is_dir()):
             have = "directory" if have else "file"
             want = "directory" if want else "file"
-            raise Incompatible(f"got {have} expected a {want}")
+            exc = IsADirectoryError if have else NotADirectoryError
+            raise exc(f"got {have} expected a {want}")
         if not isinstance(data, self.typ):
             warn(f"got a {type(data)}, expected a {self.typ}", Inconsistent)
             data = self.typ(data)
@@ -149,6 +158,11 @@ class Output[T](BaseOutput[T]):
         Coder(".pkl", Pickle, pickle.load, pickle.dump, typ=object),
     ]
 
+    @property
+    def _tmp_base(self) -> Path:
+        """A directory to put the temp dir in, should be on the same FS to allow low cost rename."""
+        return self.path.parent
+
     @overload
     def temp(
         self: "Output[TypeAliasType]", mode: str | None = None, **kwargs
@@ -163,7 +177,7 @@ class Output[T](BaseOutput[T]):
     def temp(self, mode: str | None = None, **kwargs) -> FSOutput:
         path = self.path
         dps = dict(
-            dir=path.parent,
+            dir=self._tmp_base,
             prefix=path.with_suffix(".tmp").name,
             suffix=path.suffix,
         )
@@ -199,20 +213,38 @@ class Output[T](BaseOutput[T]):
         else:
             return self.type(self.path)
 
+    def _temp_copy(self, data: Path) -> FSOutput:
+        if self.coder.is_dir:
+            return copytree(data, self.temp(), dirs_exist_ok=True)
+        else:
+            return copy2(data, self.temp(""))
+
+    def _dump(self, data: FSOutput) -> FSOutput:
+        if not data.exists():
+            raise MissingOuput(str(data))
+        data: FSOutput = self.coder.conform(data)
+        data.close()
+        if not (data._temp or data.tmpio):  # dont steal non-temporaries
+            data = self._temp_copy(data)
+            # no need to attempt EXDEV recovery via another _temp_copy
+            diff_dev = False
+        elif diff_dev := (data.stat().st_dev != self._tmp_base.stat().st_dev):
+            warn("may be slow or fail", MoveAcrossFilesystem, stacklevel=3)
+        try:
+            data = data.replace(self.path)
+        except OSError as err:
+            if err.errno == EXDEV and diff_dev:
+                warn("failed, making explicit copy", MoveAcrossFilesystem, stacklevel=3)
+                # try again
+                data = self._temp_copy(data)
+                data = data.replace(self.path)
+            else:
+                raise  #
+        return data
+
     def dump(self, data: T) -> T:
         if isinstance(data, FSOutput):
-            if not data.exists():
-                raise MissingOuput(str(data))
-            data = self.coder.conform(data)
-            if not data.temp or not data.is_relative_to(self.path.parent):
-                if self.coder.is_dir:
-                    data = copytree(data, self.temp(), dirs_exist_ok=True)
-                else:
-                    data = copy2(data, self.temp(""))
-            assert data.temp
-            if callable(close := getattr(data.file, "close", None)):
-                close()
-            data = data.replace(self.path)
+            data = self._dump(data)
             if (
                 isinstance(self.type, type)
                 and issubclass(self.type, FSOutput)
@@ -225,8 +257,8 @@ class Output[T](BaseOutput[T]):
             if isinstance(data, PseudoOutput):
                 raise NotSupported(f"wont handle {type(data)}")
             tmp = self.temp("wb")
-            dump(data, tmp.file)
-            self.dump(tmp)
+            dump(data, tmp.tmpio)
+            self._dump(tmp)
             return data
         else:
             raise NotSupported(f"got {type(data)}, expected {self.type}")

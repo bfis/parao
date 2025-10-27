@@ -1,4 +1,8 @@
+from contextlib import contextmanager
 from io import IOBase
+import os
+from pathlib import Path
+from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
 import sys
 from tempfile import TemporaryDirectory
 import pytest
@@ -10,11 +14,11 @@ from parao.output import (
     Dir,
     FSOutput,
     File,
-    Incompatible,
     Inconsistent,
     MissingOuput,
     NotSupported,
     Pickle,
+    MoveAcrossFilesystem,
     UntypedOuput,
 )
 from parao.run import PseudoOutput, RunAct
@@ -50,7 +54,7 @@ class Task2(BaseTask):
 @pytest.fixture
 def tmpdir4BaseTask(tmpdir):
     with patch.object(BaseTask.output, "base", tmpdir):
-        yield
+        yield tmpdir
 
 
 def test(tmpdir4BaseTask):
@@ -128,7 +132,7 @@ class UnsupportedPseudoOutput(PseudoOutput): ...
 def test_output_transparent(typedTaskX):
     tmp = typedTaskX.run.output.temp()
     assert isinstance(tmp, File)
-    assert isinstance(tmp.file, IOBase)
+    assert isinstance(tmp.tmpio, IOBase)
     assert tmp._temp is None
 
 
@@ -148,19 +152,63 @@ def test_output_unknown(tmpdir4BaseTask):
             TaskX().run()
 
 
+@contextmanager
+def make_readonly(target):
+    target = Path(target)
+    stat = S_IMODE(target.stat().st_mode)
+    target.chmod(stat & ~(S_IWUSR | S_IWGRP | S_IWOTH))
+    try:
+        yield
+    finally:
+        target.chmod(stat)
+
+
 def test_output_other_temp(tmpdir4BaseTask):
     with patch.object(TaskX.run, "func") as mock:
         TaskX.run.func.__annotations__ = {"return": Dir}
-        mock.return_value = Dir.temp()
+
+        if (
+            other_fs := os.environ.get(
+                "TEMP2_ON_DIFFERENT_FS", os.environ.get("XDG_RUNTIME_DIR", None)
+            )
+        ) and os.stat(tmpdir4BaseTask).st_dev != os.stat(
+            other_fs
+        ):  # pragma: no branch
+            mock.return_value = Dir.temp(dir=other_fs)
+            with (
+                pytest.warns(MoveAcrossFilesystem, match="slow"),
+                pytest.warns(MoveAcrossFilesystem, match="failed"),
+            ):
+                TaskX().run()
+            TaskX().run.output.remove()
+            mock.assert_called_once()
+            mock.reset_mock()
+
+        tmp = Dir.temp()
+        mock.return_value = tmp.parent / tmp.name
         TaskX().run()
         TaskX().run.output.remove()
         mock.assert_called_once()
         mock.reset_mock()
 
+        # now files
         TaskX.run.func.__annotations__ = {"return": File}
-        mock.return_value = File.temp()
-        TaskX().run()
-        TaskX().run.output.remove()
+
+        run = TaskX().run
+
+        tmp = run.output.temp()
+        mock.return_value = tmp.parent / tmp.name
+        run()
+        run.output.remove()
+        mock.assert_called_once()
+        mock.reset_mock()
+
+        mock.return_value = run.output.temp()
+        with (
+            make_readonly(tmpdir4BaseTask),
+            pytest.raises(OSError),
+        ):  # trigger failure in rename
+            run()
         mock.assert_called_once()
         mock.reset_mock()
 
@@ -170,6 +218,16 @@ class TaskDir(BaseTask):
         ret: Dir = self.run.output.temp()
         ret.joinpath("foo.bar").touch()
         return ret
+
+
+def test_output_Dir_alt(tmpdir4BaseTask):
+    class DirAlt(Dir): ...
+
+    with patch.object(TaskDir.run, "func") as mock:
+        TaskDir.run.func.__annotations__ = {"return": DirAlt}
+        mock.return_value = Dir.temp()
+        TaskDir().run()
+        mock.assert_called_once()
 
 
 def test_output_Dir_bad(tmpdir4BaseTask):
@@ -207,7 +265,7 @@ def test_output_Dir_bad(tmpdir4BaseTask):
         f.touch()
         assert f.is_file()
         mock.return_value = f
-        with pytest.raises(Incompatible):
+        with pytest.raises(IsADirectoryError):
             TaskDir().run()
         mock.assert_called_once()
         mock.reset_mock()
