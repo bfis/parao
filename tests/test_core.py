@@ -1,4 +1,5 @@
 from operator import attrgetter
+import pickle
 from unittest import TestCase
 from unittest.mock import Mock
 from parao.core import (
@@ -410,6 +411,13 @@ class TestParaO(TestCase):
         self.assertEqual(out3.__inner__[1].exp, 2)
         self.assertEqual(out3.__inner__[2:], (out3.in3u, out3.in3u))
 
+    def test_pickle(self):
+        pre = Out({(In, In.exp): 1, "in2": [In(exp=2, uniq=3)], "uniq": -1})
+        post = pickle.loads(pickle.dumps(pre))
+        self.assertEqual(pre, post)
+        with self.assertRaises(pickle.PicklingError):
+            pickle.dumps(bare_param)
+
 
 class In(ParaO):
     exp = Param[int](0)
@@ -433,3 +441,6 @@ class Out(ParaO):
                 ("structure", {"with", frozenset({"some", (self.in3u,) * 2})}),
             ]
         }
+
+
+bare_param = Param[str]()

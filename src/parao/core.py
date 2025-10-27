@@ -4,6 +4,7 @@ from functools import cached_property, lru_cache, partial
 from itertools import count
 from math import inf
 from os.path import dirname
+from pickle import PicklingError
 from types import GenericAlias
 from typing import (
     Any,
@@ -346,6 +347,9 @@ class ParaO(metaclass=ParaOMeta):
             )
         return res
 
+    def __eq__(self, other):
+        return isinstance(self, ParaO) and bin_hash(self) == bin_hash(other)
+
     def __hash__(self) -> int:
         return int.from_bytes(bin_hash(self)[:8])
 
@@ -582,6 +586,11 @@ class AbstractParam[T]:
 
         instance.__dict__[name] = val = self._solve(arg, name, instance, sub)
         return val
+
+    def __reduce__(self):
+        for cls_name in self._owner2name.items():
+            return getattr, cls_name
+        raise PicklingError(f"Can't pickle a {type(self)} never used on a ParaO")
 
     min_prio: float = -inf
     eager: bool = True
