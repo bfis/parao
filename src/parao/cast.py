@@ -1,6 +1,6 @@
 from itertools import repeat
-from types import UnionType, NoneType
-from typing import _AnnotatedAlias, Any, Protocol, Union, get_args, get_origin
+from types import NoneType, UnionType
+from typing import Any, Protocol, Union, _AnnotatedAlias, get_args, get_origin
 
 _numeric = int, float, complex
 
@@ -17,7 +17,7 @@ class Castable(Protocol):
 def cast(val: Any, typ: type) -> Any:
     typ0 = typ  # the orignal type
     if isinstance(typ, _AnnotatedAlias):
-        (typ,) = typ.__args__
+        typ = typ.__origin__
     ori = get_origin(typ)
 
     if cast_to := getattr(val, "__cast_to__", None):

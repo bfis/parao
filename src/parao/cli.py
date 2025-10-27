@@ -1,12 +1,12 @@
+import json
+import re
+import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
-import json
-import re
 from operator import attrgetter
-import sys
 from typing import get_origin
 from warnings import warn
 

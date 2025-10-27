@@ -748,7 +748,7 @@ class Expansion[T](BaseException):
                 rkey.append(cls)
         return tuple(reversed(rkey))
 
-    def expand(self, prio: PrioT = 0, **kwargs) -> Generator[T]:
+    def expand(self, prio: PrioT = 0, **kwargs) -> Generator[T, None, None]:
         key = self.make_key(**kwargs)
         for val in self.values:
             res = self.make(Arg(key, val, prio))
@@ -758,7 +758,9 @@ class Expansion[T](BaseException):
                 yield res
 
     @staticmethod
-    def generate(typ: ParaOMeta, args: Arguments, **kwargs) -> Generator[ParaO]:
+    def generate(
+        typ: ParaOMeta, args: Arguments, **kwargs
+    ) -> Generator[ParaO, None, None]:
         try:
             yield typ(args)
         except Expansion as exp:
