@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import cached_property, lru_cache, partial
+from functools import lru_cache, partial
 from itertools import count
 from math import inf
 from os.path import dirname
@@ -328,6 +328,28 @@ class ParaOMeta(type):
         return ret
 
 
+def get_inner_parao(value: Any):
+    if isinstance(value, ParaO):
+        yield value
+    elif isinstance(value, Expansion):
+        yield from value.expand()
+    elif isinstance(value, (dict, list, tuple, set, frozenset)):
+        queue = [iter((value,))]
+        while queue:
+            for curr in queue[-1]:
+                if isinstance(curr, (list, tuple, set, frozenset)):
+                    queue.append(iter(curr))
+                    break
+                elif isinstance(curr, dict):
+                    queue.append(iter(curr.keys()))
+                    queue.append(iter(curr.values()))
+                    break
+                elif isinstance(curr, ParaO):
+                    yield curr
+            else:
+                queue.pop()
+
+
 class ParaO(metaclass=ParaOMeta):
     __args__: Arguments  # | UNSET
 
@@ -353,32 +375,11 @@ class ParaO(metaclass=ParaOMeta):
     def __hash__(self) -> int:
         return int.from_bytes(bin_hash(self)[:8])
 
-    @cached_property
-    def __inner__(self) -> tuple["ParaO", ...]:
-        ret = []
+    @property
+    def __inner__(self):
         for name, param in self.__class__.__own_parameters__.items():
             if param.significant:
-                val = getattr(self, name)
-                if isinstance(val, ParaO):
-                    ret.append(val)
-                elif isinstance(val, Expansion):
-                    ret.extend(val.expand())
-                elif isinstance(val, (dict, list, tuple, set, frozenset)):
-                    queue = [iter((val,))]
-                    while queue:
-                        for curr in queue[-1]:
-                            if isinstance(curr, (list, tuple, set, frozenset)):
-                                queue.append(iter(curr))
-                                break
-                            elif isinstance(curr, dict):
-                                queue.append(iter(curr.keys()))
-                                queue.append(iter(curr.values()))
-                                break
-                            elif isinstance(curr, ParaO):
-                                ret.append(curr)
-                        else:
-                            queue.pop()
-        return tuple(ret)
+                yield from get_inner_parao(getattr(self, name))
 
     def __repr__(self, *, compact: bool | str = False):
         if compact:

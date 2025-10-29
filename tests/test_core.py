@@ -400,16 +400,21 @@ class TestParaO(TestCase):
 
     def test_inner(self):
         out1 = Out()
-        self.assertEqual(out1.__inner__, (out1.in1, *out1.in2, out1.in3u, out1.in3u))
+        self.assertEqual(
+            tuple(out1.__inner__), (out1.in1, *out1.in2, out1.in3u, out1.in3u)
+        )
 
         out2 = Out(in2=[In(), In()])
-        self.assertEqual(out2.__inner__, (out2.in1, *out2.in2, out2.in3u, out2.in3u))
+        self.assertEqual(
+            tuple(out2.__inner__), (out2.in1, *out2.in2, out2.in3u, out2.in3u)
+        )
 
         with eager(True):
             out3 = Out({("in1", "exp"): [1, 2]})
-        self.assertEqual(out3.__inner__[0].exp, 1)
-        self.assertEqual(out3.__inner__[1].exp, 2)
-        self.assertEqual(out3.__inner__[2:], (out3.in3u, out3.in3u))
+        inner = tuple(out3.__inner__)
+        self.assertEqual(inner[0].exp, 1)
+        self.assertEqual(inner[1].exp, 2)
+        self.assertEqual(inner[2:], (out3.in3u, out3.in3u))
 
     def test_pickle(self):
         pre = Out({(In, In.exp): 1, "in2": [In(exp=2, uniq=3)], "uniq": -1})
