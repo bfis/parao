@@ -19,7 +19,7 @@ from typing import (
     get_type_hints,
     overload,
 )
-from warnings import warn
+from warnings import catch_warnings, warn
 from weakref import WeakKeyDictionary
 
 from .cast import Opaque, cast
@@ -487,7 +487,8 @@ def _solve_name(param: "Param", icls: "ParaOMeta") -> str | None:
 
 @lru_cache
 def _get_type_hints(cls: "ParaOMeta"):
-    return get_type_hints(cls)
+    with catch_warnings(category=TypedAlias.TypedAliasRedefined, action="ignore"):
+        return get_type_hints(cls)
 
 
 ### actual code
