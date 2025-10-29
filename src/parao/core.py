@@ -678,7 +678,7 @@ class Expansion[T](BaseException):
         self.values = values
         self._frames: list[tuple[ParaOMeta, Param, Arg | None]] = []
 
-    make: Callable[[Arg], T | Self] | None = None
+    make: Callable[[Arg], ParaO | Self] | None = None
 
     def test(self, item: KeyE | Iterable[KeyE]):
         match item:
@@ -757,7 +757,7 @@ class Expansion[T](BaseException):
                 rkey.append(cls)
         return tuple(reversed(rkey))
 
-    def expand(self, prio: PrioT = 0, **kwargs) -> Generator[T, None, None]:
+    def expand(self, prio: PrioT = 0, **kwargs) -> Generator[ParaO, None, None]:
         key = self.make_key(**kwargs)
         for val in self.values:
             res = self.make(Arg(key, val, prio))
