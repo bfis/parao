@@ -179,7 +179,7 @@ class CLI:
                 cand
                 for cand in reversed(curr.__subclasses__())
                 if cand.__name__[0] != "_"
-                and cand.__module__[0] != "_"
+                and (cand.__module__[0] != "_" or cand.__module__ == "__main__")
                 and cand not in seen
             )
             seen.add(curr)
