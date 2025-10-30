@@ -10,7 +10,6 @@ from operator import attrgetter
 from typing import get_origin
 from warnings import warn
 
-from .action import Plan
 from .cast import cast
 from .core import AbstractParam, Arg, Arguments, Expansion, ParaO, ParaOMeta, eager
 from .misc import PeekableIter, is_subseq
@@ -386,6 +385,8 @@ class CLI:
             args = sys.argv[1:]
 
         kwargs.setdefault("run", True)
+
+        from .action import Plan
 
         with Plan().use(**kwargs):
             return list(self._run(args))

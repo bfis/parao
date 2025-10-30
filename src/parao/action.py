@@ -1,9 +1,11 @@
 from contextlib import contextmanager
 from functools import lru_cache
 from inspect import Parameter, signature
+from operator import attrgetter
 from typing import Any, Callable, Concatenate, Iterable, Self, Type
 
 from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, eager
+from .cli import Value
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
@@ -31,10 +33,11 @@ def _method_1st_arg_annotation[T](
 class BaseAct[T, A: "BaseAction"]:
     __slots__ = ("action", "instance", "value")
 
-    def __init__(self, action: A, instance: ParaO, value: T):
+    def __init__(self, action: A, instance: ParaO, value: T, position: int = 0):
         self.action = action
         self.instance = instance
         self.value = value
+        self.position = position
         self._add()
 
     def _add(self):
@@ -58,8 +61,9 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
         return self.type
 
     def _get(self, val, name, instance) -> BaseAct:
+        pos = val.position if isinstance(val, Value) else 0
         val = super()._get(val, name, instance)
-        return self._act(self, instance, val)
+        return self._act(self, instance, val, pos)
 
     def _collect(self, expansion, instance):  # can't collect
         return False  # pragma: no cover
@@ -168,5 +172,6 @@ class Plan(list[BaseAct]):
                 self.run()
 
     def run(self):
+        self.sort(key=attrgetter("position"))
         while self:
             self.pop(0)()
