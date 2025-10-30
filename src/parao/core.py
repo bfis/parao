@@ -270,6 +270,15 @@ class _OwnParameters(dict[str, "AbstractParam"]):
         )
         self.vals = set(self.values())
 
+    @classmethod
+    def reset(cls):
+        if cls.cache:
+            warn(
+                "partially filled __own_parameters__ cache reset",
+                skip_file_prefixes=_warn_skip,
+            )
+        cls.cache.clear()
+
     cache: dict["ParaOMeta", "_OwnParameters"] = {}
 
 
@@ -286,25 +295,16 @@ class ParaOMeta(type):
 
     def __setattr__(cls, name, value):
         if not name.startswith("__"):
-            if cache := _OwnParameters.cache.get(cls):
-                if old := cache.get(name):
-                    old.__set_name__(cls, None)
-                    cache.vals.remove(old)
-                    del cache[name]
+            _OwnParameters.reset()
             if isinstance(value, AbstractParam):
                 value.__set_name__(cls, name)
-                if cache:
-                    cache.vals.add(value)
-                    cache[name] = value
         return super().__setattr__(name, value)
 
     def __delattr__(cls, name):
         if not name.startswith("__"):
-            if cache := _OwnParameters.cache.get(cls):
-                if old := cache.get(name):
-                    old.__set_name__(cls, None)
-                    cache.vals.remove(old)
-                    del cache[name]
+            _OwnParameters.reset()
+            if isinstance((old := getattr(cls, name, None)), AbstractParam):
+                old.__set_name__(cls, None)
         return super().__delattr__(name)
 
     def __cast_from__(cls, value, original_type):
