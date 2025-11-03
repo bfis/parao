@@ -5,10 +5,10 @@ from unittest.mock import Mock
 from parao.core import (
     UNSET,
     AbstractParam,
-    Arg,
     Arguments,
     Const,
     Expansion,
+    Fragment,
     ParaO,
     Param,
     MissingParameterValue,
@@ -16,102 +16,89 @@ from parao.core import (
     TypedAlias,
     Unset,
     UntypedParameter,
+    Value,
     eager,
     DuplicateParameter,
     ExpansionGeneratedKeyMissingParameter,
 )
-
+import pytest
 
 uniq_object = object()
 
 
-class TestUnset(TestCase):
-    def test(self):
-        self.assertIsInstance(UNSET, Unset)
-        self.assertIs(UNSET, Unset())
-        self.assertIs(Unset(), Unset())
+def test_unset():
+    assert isinstance(UNSET, Unset)
+    assert UNSET is Unset()
+    assert Unset() is Unset()
 
 
-class TestArg(TestCase):
+def test_Value():
+    val = Value(uniq_object)
+    assert val.val is uniq_object
+    assert val.prio == 0
+    assert val.position is None
 
-    def test_create(self):
-        key = "foo", "bar", "boo"
-        a = Arg(key, uniq_object)
-        self.assertEqual(a.key, key)
-        self.assertEqual(a.val, uniq_object)
-        self.assertEqual(a.prio, 0)
-        self.assertEqual(a.offset, 0)
-        # prio argument
-        self.assertEqual(Arg(key, uniq_object, 123).prio, 123)
-        # offset argument
-        self.assertEqual(Arg(key, uniq_object, 0, 123).offset, 123)
+    assert repr(Value(None, prio=1, position=1)) == "Value(None, 1, 1)"
 
-    def test_repr(self):
 
-        self.assertEqual(
-            repr(Arg(("foo", "bar"), val=123, prio=321)),
-            "Arg('foo', 'bar', val=123, prio=321)",
+def test_Fragment():
+    key = ("foo", "bar")
+    f = Fragment.make(key, Value(uniq_object))
+    assert f.param == key[0]
+    assert f.types is None
+    assert isinstance(f.inner, Fragment)
+    i = f.inner
+    assert i.param == key[1]
+    assert i.types is None
+    assert isinstance(i.inner, Value)
+
+    assert (
+        repr(Fragment.make(key, Value(None)))
+        == "Fragment('foo', None, Fragment('bar', None, Value(None)))"
+    )
+
+
+def test_Arguments():
+    tpl = (1, "foo", uniq_object)  # the are actually bad types ...
+    assert Arguments(tpl) == tpl
+
+    assert (
+        Arguments(
+            [
+                Fragment.make(("foo",), Value(uniq_object, 123)),
+                Fragment.make(("foo", "bar"), Value(uniq_object, 123)),
+            ]
         )
-        self.assertEqual(
-            repr(Arg(("foo", "bar"), val=123, offset=1)),
-            "Arg('bar', val=123)",
+        == Arguments.from_dict(
+            {"foo": uniq_object, ("foo", "bar"): uniq_object},
+            prio=123,
         )
-
-
-class TestArguments(TestCase):
-
-    def test_create(self):
-        tpl = (1, "foo", uniq_object)  # the are actually bad types ...
-        self.assertTupleEqual(Arguments(tpl), tpl)
-
-        self.assertEqual(
-            Arguments(
-                [
-                    Arg(("foo",), uniq_object, prio=123),
-                    Arg(("foo", "bar"), uniq_object, prio=123),
-                ]
-            ),
-            Arguments.from_dict(
-                {"foo": uniq_object, ("foo", "bar"): uniq_object},
-                prio=123,
-            ),
+        == Arguments.from_dict(
+            [
+                ("foo", uniq_object),
+                (("foo", "bar"), uniq_object),
+            ],
+            prio=123,
         )
-        self.assertEqual(
-            Arguments(
-                [
-                    Arg(("foo",), uniq_object, prio=123),
-                    Arg(("foo", "bar"), uniq_object, prio=123),
-                ]
-            ),
-            Arguments.from_dict(
-                [
-                    ("foo", uniq_object),
-                    (("foo", "bar"), uniq_object),
-                ],
-                prio=123,
-            ),
-        )
+    )
 
-        self.assertIs(Arguments.from_list([]), Arguments.EMPTY)
-        self.assertIs(Arguments.from_list([a := Arguments()]), a)
-        self.assertEqual(
-            Arguments.from_list([Arg(("foo",), uniq_object)]),
-            Arguments([Arg(("foo",), uniq_object)]),
-        )
+    assert Arguments.from_list([]) is Arguments.EMPTY
+    assert Arguments.from_list([a := Arguments()]) is a
+    assert Arguments.from_list(
+        [Fragment.make(("foo",), Value(uniq_object))]
+    ) == Arguments([Fragment.make(("foo",), Value(uniq_object))])
 
-        self.assertRaises(TypeError, lambda: ParaO(123))
+    with pytest.raises(TypeError):
+        Arguments(123)
 
-    def test_repr(self):
-
-        self.assertEqual(repr(Arguments.make({})), "Arguments()")
-        self.assertEqual(
-            repr(Arguments.make(key=123)),
-            "Arguments(Arg('key', val=123),)",
-        )
-        self.assertEqual(
-            repr(Arguments.make(foo=123, bar=456)),
-            "Arguments(Arg('foo', val=123), Arg('bar', val=456))",
-        )
+    assert repr(Arguments.make({})) == "Arguments()"
+    assert (
+        repr(Arguments.make(key=123)) == "Arguments(Fragment('key', None, Value(123)),)"
+    )
+    assert (
+        repr(Arguments.make(foo=123, bar=456))
+        == "Arguments(Fragment('foo', None, Value(123)), Fragment('bar', None, Value(456)))"
+    )
 
 
 class TestParam(TestCase):

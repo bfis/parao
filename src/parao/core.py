@@ -12,6 +12,7 @@ from typing import (
     Collection,
     Generator,
     Iterable,
+    Iterator,
     Mapping,
     Protocol,
     Self,
@@ -51,94 +52,86 @@ type PrioT = int | float
 type Mapish[K, V] = Mapping[K, V] | Iterable[tuple[K, V]]
 
 
-@dataclass(frozen=True, slots=True)
-class Arg:
-    key: KeyT
-    val: Any
+@dataclass(slots=True, frozen=True)
+class Value[T: Any]:
+    val: T
     prio: PrioT = 0
-    offset: int = 0
+    position: int = None
+
+    __hash__ = object.__hash__
+
+    def __or__(self, other: "Value | None"):
+        return self if other is None or self.prio > other.prio else other
+
+    def __ror__(self, other: "Value | None"):
+        return self if other is None or self.prio >= other.prio else other
 
     def __repr__(self):
-        parts = list(map(repr, self.key[self.offset :]))
-        parts.append(f"val={self.val!r}")
+        ret = [repr(self.val)]
         if self.prio:
-            parts.append(f"prio={self.prio!r}")
-        return f"{self.__class__.__name__}({', '.join(parts)})"
+            ret.append(repr(self.prio))
+        if self.position is not None:
+            ret.append(repr(self.position))
+        return f"{self.__class__.__name__}({", ".join(ret)})"
 
-    __hash__ = object.__hash__  # value can be unhashable!
 
-    @property
-    def is_final(self):
-        return self.offset >= len(self.key)
+@dataclass(slots=True, frozen=True)
+class Fragment:
+    param: "str | AbstractParam | None"
+    types: tuple[type] | None
+    inner: "Fragment | Arguments | Value"
 
-    @property
-    def effective_key(self):
-        return self.key[self.offset :]
+    @classmethod
+    def make(cls, key: KeyTE, value: "Value | Fragment | Arguments"):
+        assert isinstance(value, (Value, Fragment, Arguments))
+        if not isinstance(key, tuple):
+            key = (key,)
+        return cls._make(iter(key), value)
 
-    def __gt__(self, other: "Arg | None") -> bool:
-        return other is None or self.prio > other.prio
-
-    def __lt__(self, other: "Arg | None") -> bool:
-        return other is not None and self.prio < other.prio
-
-    # @lru_cache
-    def _solve_value(self, ref: "ParaOMeta"):
-        last = len(self.key) - 1
-        off = self.offset
-        # match owner class filters
-        while (
-            isinstance((key := self.key[off]), type)
-            and off < last
-            and issubclass(ref, key)
-        ):
-            off += 1
-
-        op = ref.__own_parameters__
-        if key in op.vals or (key := op.get(key)):
-            return (
-                key,
-                Arg(self.key, self.val, self.prio, off + 1),
-                off == self.offset,  # is_final & no class filter
-            )
+    @classmethod
+    def _make(cls, it: Iterator[KeyE], value: "Value | Fragment | Arguments"):
+        types = []
+        for k in it:
+            if isinstance(k, type):
+                types.append(k)
+            elif isinstance(k, (str, AbstractParam)):
+                return cls(k, tuple(types) if types else None, cls._make(it, value))
+            else:
+                raise TypeError(f"invaid key components: {k!r}")
         else:
-            return None, None, False
+            return cls(None, tuple(types), value) if types else value
 
-    @lru_cache
-    def solve_class[T: type](self, cls: T) -> tuple[PrioT, "T | Arg | Arguments"]:
-        last = len(self.key) - 1
-        off = self.offset
-        # match owner class filters
-        while (
-            off <= last
-            and isinstance((key := self.key[off]), type)
-            and issubclass(cls, key)
-        ):
-            off += 1
-        if (off == last and key == "__class__") or off > last:
-            if not isinstance(self.val, (type, Arg, Arguments)):
-                raise TypeError(f"{self!r} resolved to non-class")
-            return self.prio, self.val
-        return 0, UNSET
+    def is_type_ok(self, ref: type):
+        if typs := self.types:
+            return all(issubclass(ref, typ) for typ in typs)
+        return True
 
-    def get_root_of(self, arg: "Arg") -> "Arg | None":
-        if (
-            self.key is arg.key
-            and self.val is arg.val
-            and self.prio is arg.prio
-            and self.offset <= arg.offset
-        ):
-            return self
+    @property
+    def effective_key(self) -> KeyT:
+        if p := self.param:
+            r = (self.types or ()) + (p,)
+            if isinstance(i := self.inner, Fragment):
+                r += i.effective_key
+            return r
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}({self.param!r}, {self.types!r}, {self.inner!r})"
+        )
 
 
-class Arguments(tuple["Arguments | Arg", ...]):
-    is_final = False
+class Arguments(tuple["Arguments | Fragment", ...]):
 
     @classmethod
     def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
         return cls._make(args + (kwargs,)) if kwargs else cls._make(args)
 
     @classmethod
-    def _make(cls, args: "tuple[Arguments | HasArguments | dict[KeyTE, Any], ...]"):
+    def _make(
+        cls,
+        args: "tuple[Arguments | HasArguments | dict[KeyTE, Any], ...]",
+        kwargs: dict[str, Any] = None,
+    ):
         sub = []
         if arg := cls._ctxargs():
             sub.append(arg)
@@ -153,6 +146,8 @@ class Arguments(tuple["Arguments | Arg", ...]):
                     sub.append(cls.from_dict(arg.items()))
             else:
                 raise TypeError(f"unsupported argument type: {type(arg)}")
+        if kwargs:
+            sub.append(cls.from_dict(kwargs))
 
         return cls.from_list(sub)
 
@@ -164,10 +159,10 @@ class Arguments(tuple["Arguments | Arg", ...]):
     ):
         if callable(items := getattr(k2v, "items", None)):
             k2v = items()
-        return cls(Arg(k if isinstance(k, tuple) else (k,), v, prio) for k, v in k2v)
+        return cls(Fragment.make(k, Value(v, prio)) for k, v in k2v)
 
     @classmethod
-    def from_list(cls, args: "list[Arguments | Arg]") -> "Arguments":
+    def from_list(cls, args: "list[Arguments | Fragment]") -> "Arguments":
         """Turn an iterable into arguments. Avoids unnecessary nesting or repeated creation of empty Arguments."""
         match args:
             case []:
@@ -179,17 +174,19 @@ class Arguments(tuple["Arguments | Arg", ...]):
     def __repr__(self):
         return self.__class__.__name__ + (tuple.__repr__(self) if self else "()")
 
-    def solve_value(self, param, owner, name) -> tuple[Arg | None, "Arguments"]:
+    def solve_value(self, param, owner, name) -> tuple["Arguments", "Value | None"]:
         com, val, sub = self._solve_values(owner)
-        su = sub.get(param)
-
-        return val.get(param), com if su is None else Arguments.from_list(su)
+        if su := sub.get(param):
+            su = Arguments.from_list(su)
+        else:
+            su = com
+        return su, val.get(param)
 
     @lru_cache
     def _solve_values(self, ref: "ParaOMeta"):
-        com = []
-        val: dict[AbstractParam, Arg] = {}
-        sub: defaultdict[AbstractParam, list[Arguments | Arg]]
+        com: list[Arguments | Fragment] = []
+        val: dict[AbstractParam, Value] = {}
+        sub: defaultdict[AbstractParam, list[Arguments | Fragment]]
 
         if False:
             sub = defaultdict(com.copy)  # TODO: optimize this
@@ -202,48 +199,76 @@ class Arguments(tuple["Arguments | Arg", ...]):
                     com = [Arguments.from_list(com)]
                 return com.copy()
 
+        op = ref.__own_parameters__
         for arg in self:
-            if isinstance(arg, Arg):
-                k, d, r = arg._solve_value(ref)
-                if not r:
-                    sub.get(k, com).append(arg)
-                if d is not None:
-                    assert k is not None
-                    if d.is_final:
-                        if isinstance(d.val, (Arguments, Arg)):
-                            sub[k].append(d.val)
-                        else:
-                            val[k] = max(d, val.get(k))
-                    else:
-                        sub[k].append(d)
-            else:
-                c, v, s = arg._solve_values(ref)
-                val.update(v)
-                for k, v in s.items():
+            if isinstance(arg, Arguments):
+                co, va, su = arg._solve_values(ref)
+                for k, v in va.items():
+                    val[k] = val.get(k) | v
+                for k, v in su.items():
                     sub[k].extend(v)
-                com.append(c)  # must be done after filling sub
+                if co:
+                    com.append(co)  # must be done after filling sub
+            elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
+                if isinstance((v := arg.inner), Value):
+                    val[k] = val.get(k) | v
+                    if arg.types:  # do we want this?
+                        sub.get(k, com).append(arg)
+                else:
+                    sub[k].append(v)
+            else:
+                com.append(arg)
 
-        return Arguments.from_list(com), val, sub
+        if val or sub:
+            return Arguments.from_list(com), val, sub
+        else:
+            return self, {}, {}
 
     @lru_cache
-    def solve_class(self, cls):
-        prio = -inf
+    def solve_class(
+        self, ref: "ParaOMeta"
+    ) -> "tuple[Arguments, Value[ParaOMeta] | None]":
+        sub = []
+        res = res0 = Value(ref, -inf)
+        tar = {None, "__class__"}
+        alt = False  # sub != self
 
-        for v in self:
-            while isinstance(v, (Arguments, Arg)):
-                p, v = v.solve_class(cls)
-                if v is UNSET:
-                    break
-                elif prio <= p:
-                    prio = p
-                    cls = v
+        for arg in self:
+            if isinstance(arg, Arguments):
+                s, r = arg.solve_class(res.val)
+                if s:
+                    sub.append(s)
+                    alt = alt or s is not arg
+                if r is None:
+                    continue
+            elif (
+                arg.param in tar
+                and isinstance((r := arg.inner), Value)
+                and arg.is_type_ok(res.val)
+            ):
+                if arg.param:
+                    alt = True
+                else:
+                    sub.append(arg)
+            else:
+                sub.append(arg)
+                continue
+            res |= r
+            if res.val is UNSET:
+                res = res0
 
-        return prio, cls
+        return self.from_list(sub) if alt else self, None if res is res0 else res
 
-    def get_root_of(self, arg: "Arg") -> "Arg | None":
-        for a in self:
-            if r := a.get_root_of(arg):
-                return r
+    def get_root_of(self, seek: Value) -> Fragment | None:
+        for root in self:
+            curr = root
+            while isinstance(curr, Fragment):
+                curr = curr.inner
+            if curr is seek:
+                return root
+            elif isinstance(curr, Arguments):
+                if sub := curr.get_root_of(seek):
+                    return sub
 
 
 Arguments.EMPTY = Arguments()
@@ -269,6 +294,10 @@ class _OwnParameters(dict[str, "AbstractParam"]):
             and isinstance((param := getattr(cls, name)), AbstractParam)
         )
         self.vals = set(self.values())
+
+    def got(self, key: "str | AbstractParam") -> "AbstractParam | None":
+        if key in self.vals or (key := self.get(key)):
+            return key
 
     @classmethod
     def reset(cls):
@@ -317,8 +346,9 @@ class ParaOMeta(type):
     def __call__(
         cls, *args: Arguments | HasArguments | dict[KeyTE, Any], **kwargs: Any
     ) -> Self:
-        arg = Arguments._make(args + (kwargs,) if kwargs else args)
-        ret = cls.__new__(arg.solve_class(cls)[1])
+        arg = Arguments._make(args, kwargs)
+        arg, val = arg.solve_class(cls)
+        ret = cls.__new__(cls if val is None else val.val)
         ret.__args__ = arg
         ret.__init__()
         if eager():
@@ -532,24 +562,25 @@ class AbstractParam[T]:
             typ = _get_type_hints(cls).get(name, UNSET)
         return typ
 
-    def _cast(self, val, typ):
+    def _cast(self, raw, typ):
 
         if typ is not UNSET:
             try:
-                exp = cast(val, Expansion[typ])
+                exp = cast(raw, Expansion[typ])
             except TypeError:
                 pass
             else:
                 if isinstance(exp, Expansion):
                     raise exp
-        return cast(val, typ)
+        return cast(raw, typ)
 
-    def _get(self, val: Any, name: str, instance: "ParaO") -> T:
+    def _get(self, val: Value | None, name: str, instance: "ParaO") -> T:
+        raw = UNSET if val is None else val.val
         typ = self._type(type(instance), name)
         if typ is UNSET:
             UntypedParameter.warn(self, instance, name)
-            return val
-        return self._cast(val, typ)
+            return raw
+        return self._cast(raw, typ)
 
     def _collect(self, expansion: "Expansion", instance: "ParaO"):
         return bool(self.collect) and (
@@ -560,19 +591,20 @@ class AbstractParam[T]:
 
     def _solve(
         self,
-        arg: Arg | None,
+        val: Value | None,
         name: str,
         instance: "ParaO",
-        *args: Arguments | Arg,
+        *args: Arguments | Fragment,
     ):
-        val = UNSET if arg is None or arg.prio < self.min_prio else arg.val
+        if val and val.prio < self.min_prio:
+            val = None
 
         try:
             with Arguments._ctxargs(Arguments.from_list(args)):
                 return self._get(val, name, instance)
         except Expansion as exp:
-            exp.process(self, instance, arg)
-            exp.make = partial(self._solve, arg, name, instance, *args)
+            exp.process(self, instance, val)
+            exp.make = partial(self._solve, val, name, instance, *args)
             return exp
         except Exception as exc:
             exc.add_note(f"parameter {name}={safe_repr(self)} on {safe_repr(instance)}")
@@ -584,10 +616,10 @@ class AbstractParam[T]:
         cls = type(instance)
         name = self._name(cls)
 
-        arg, sub = instance.__args__.solve_value(self, cls, name)
+        sub, val = instance.__args__.solve_value(self, cls, name)
 
-        instance.__dict__[name] = val = self._solve(arg, name, instance, sub)
-        return val
+        instance.__dict__[name] = raw = self._solve(val, name, instance, sub)
+        return raw
 
     def __reduce__(self):
         for cls_name in self._owner2name.items():
@@ -640,8 +672,8 @@ class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
         return typ
 
     def _get(self, val, name, instance) -> T:
-        val = super()._get(val, name, instance)
-        return self.func(instance) if val is UNSET else val
+        raw = super()._get(val, name, instance)
+        return self.func(instance) if raw is UNSET else raw
 
 
 class MissingParameterValue(TypeError): ...
@@ -652,13 +684,13 @@ class Param[T](AbstractParam[T]):
         super().__init__(default=default, **kwargs)
 
     def _get(self, val, name, instance):
-        val = super()._get(val, name, instance)
-        if val is UNSET:
+        raw = super()._get(val, name, instance)
+        if raw is UNSET:
             if self.default is UNSET:
                 raise MissingParameterValue(name)
             else:
                 return self.default
-        return val
+        return raw
 
 
 class ExpansionGeneratedKeyMissingParameter(RuntimeWarning): ...
@@ -678,9 +710,9 @@ class Expansion[T](BaseException):
         super().__init__()
         assert iter(values)  # ensure values is iterable
         self.values = values
-        self._frames: list[tuple[ParaOMeta, Param, Arg | None]] = []
+        self._frames: list[tuple[ParaOMeta, Param, Value | None]] = []
 
-    make: Callable[[Arg], ParaO | Self] | None = None
+    make: Callable[[Value], ParaO | Self] | None = None
 
     def test(self, item: KeyE | Iterable[KeyE]):
         match item:
@@ -693,19 +725,19 @@ class Expansion[T](BaseException):
             case _:
                 return all(map(self.test, item))
 
-    def process(self, param: AbstractParam, inst: ParaO, arg: Arg):
+    def process(self, param: AbstractParam, inst: ParaO, value: Value | None):
         # leave marks of origin
         if not self._frames:
             self.param = param
             self.source = inst
             # do we need these? or are they only for _unwind construction
-            self.arg = arg
+            self.value = value
         # is it collected here?
         if param._collect(self, inst):
             return  # this will add ._get
         # keep track of key to dial-down to the origin
         self._frames.append(
-            (inst.__class__, param, inst.__args__.get_root_of(self.arg))
+            (inst.__class__, param, inst.__args__.get_root_of(self.value))
         )
         raise  # self # but don't to avoid mangling the traceback
 
@@ -762,7 +794,7 @@ class Expansion[T](BaseException):
     def expand(self, prio: PrioT = 0, **kwargs) -> Generator[ParaO, None, None]:
         key = self.make_key(**kwargs)
         for val in self.values:
-            res = self.make(Arg(key, val, prio))
+            res = self.make(Fragment.make(key, Value(val, prio)))
             if isinstance(res, Expansion):
                 yield from res.expand(prio=prio, **kwargs)
             else:

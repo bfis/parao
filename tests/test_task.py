@@ -6,9 +6,11 @@ from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
 import sys
 from tempfile import TemporaryDirectory
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
-from parao.core import Const, Param
+from parao.action import ValueAction
+from parao.cli import CLI
+from parao.core import Const, ParaO, Param
 from parao.output import (
     JSON,
     Dir,
@@ -386,3 +388,21 @@ def test_remove(capsys, tmpdir4BaseTask):
             "  tests.test_task:Task1(): removed",
             "",
         ]
+
+
+def test_action_ordering():
+    func = Mock()
+
+    class Foo(ParaO):
+        act1 = ValueAction[int, None](func)
+        act2 = ValueAction[int, None](func)
+
+    cli = CLI(entry_points=[Foo])
+
+    [foo] = cli.run(["Foo", "--act1=1", "--act2=2"])
+    func.assert_has_calls([call(foo, 1), call(foo, 2)])
+
+    func.reset_mock()
+
+    [foo] = cli.run(["Foo", "--act2=2", "--act1=1"])
+    func.assert_has_calls([call(foo, 2), call(foo, 1)])

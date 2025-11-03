@@ -7,21 +7,30 @@ from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
 from operator import attrgetter
-from typing import get_origin
+from typing import Iterable, get_origin
 from warnings import warn
 
+from .action import Plan
 from .cast import cast
-from .core import AbstractParam, Arg, Arguments, Expansion, ParaO, ParaOMeta, eager
+from .core import (
+    AbstractParam,
+    Arguments,
+    Expansion,
+    Fragment,
+    ParaO,
+    ParaOMeta,
+    Value,
+    eager,
+)
 from .misc import PeekableIter, is_subseq
 
 
-class Value(str):
-    __slots__ = ("empty", "position")
+class CLIstr(str):
+    __slots__ = ("empty",)
 
-    def __new__(cls, value: str, position: int):
+    def __new__(cls, value: str):
         self = super().__new__(cls, "" if value is None else value)
         self.empty = value is None
-        self.position = position
         return self
 
     def __cast_to__(self, typ, original_type):
@@ -169,10 +178,10 @@ class UnusedCLIArguments(RuntimeWarning): ...
 class CLI:
     prase_raw = CLIParser()
 
-    def __init__(self):
+    def __init__(self, entry_points: Iterable[ParaOMeta] | None = None):
 
         seen = set()
-        queue: list[type] = [ParaO]
+        queue: list[type] = [ParaO] if entry_points is None else list(entry_points)
         for curr in queue:
             queue.extend(
                 cand
@@ -294,7 +303,7 @@ class CLI:
 
         typ: type = None
         raw: list[str] = None
-        curr: list[Arg] = None
+        curr: list[Fragment] = None
 
         pit = PeekableIter(args)
         for arg in pit:
@@ -324,7 +333,7 @@ class CLI:
                             e.add_note(f"for argument {arg}")
                             raise
                     else:
-                        value = Value(value, len(curr))
+                        value = CLIstr(value)
 
                     # prio
                     if prio := flags.get("prio", None):
@@ -340,7 +349,7 @@ class CLI:
                         prio = 1 - start.count("-") + start.count("+")
 
                     raw.append(arg)
-                    curr.append(Arg(key, value, prio))
+                    curr.append(Fragment.make(key, Value(value, prio, len(curr))))
                 else:
                     if typ is not None:
                         got.append((typ, Arguments(curr), raw))
@@ -385,8 +394,6 @@ class CLI:
             args = sys.argv[1:]
 
         kwargs.setdefault("run", True)
-
-        from .action import Plan
 
         with Plan().use(**kwargs):
             return list(self._run(args))

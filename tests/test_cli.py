@@ -100,7 +100,7 @@ class TestCLI(TestCase):
         )
         with self.assertRaises(MalformedCommandline):
             cli.run(["Outer1", "--tests.test_cli:=123"])
-        with self.assertWarns(UnsupportedKeyType):
+        with self.assertWarns(UnsupportedKeyType), self.assertRaises(TypeError):
             cli.run(["Outer1", "--tests.test_cli:plain_object=123"])
 
     def test_prio(self):

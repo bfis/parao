@@ -4,8 +4,7 @@ from inspect import Parameter, signature
 from operator import attrgetter
 from typing import Any, Callable, Concatenate, Iterable, Self, Type
 
-from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, eager
-from .cli import Value
+from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, Value, eager
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
