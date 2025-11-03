@@ -4,6 +4,7 @@ from unittest import TestCase
 from unittest.mock import Mock
 from parao.core import (
     UNSET,
+    OwnParameters,
     AbstractParam,
     Arguments,
     Const,
@@ -163,7 +164,10 @@ class TestParaO(TestCase):
 
         self.assertRaises(TypeError, lambda: ParaO({ParaO: 123}))
 
-        with self.assertRaises(DuplicateParameter):
+        with (
+            self.assertWarns(OwnParameters.CacheReset),
+            self.assertRaises(DuplicateParameter),
+        ):
             Sub.foo1 = Sub.foo2 = Param()
 
     def test_own_params(self):
@@ -173,15 +177,18 @@ class TestParaO(TestCase):
 
         self.assertEqual(Sub.__own_parameters__, {"foo": Sub.foo, "bar": Sub.bar})
 
-        Sub.boo = Param(type=float)
+        with self.assertWarns(OwnParameters.CacheReset):
+            Sub.boo = Param(type=float)
 
         self.assertEqual(Sub.__own_parameters__["boo"], Sub.boo)
 
-        Sub.boo = Param(type=complex)
+        with self.assertWarns(OwnParameters.CacheReset):
+            Sub.boo = Param(type=complex)
 
         self.assertEqual(Sub.__own_parameters__["boo"], Sub.boo)
 
-        del Sub.foo, Sub.bar, Sub.boo
+        with self.assertWarns(OwnParameters.CacheReset):
+            del Sub.foo, Sub.bar, Sub.boo
 
         self.assertEqual(Sub.__own_parameters__, {})
 
@@ -191,14 +198,14 @@ class TestParaO(TestCase):
             foo: int = Param()
             bar = Param(None, type=str)
             boo = Param[bool]()
-            bad = Param(None)
+            notyp = Param(None)
 
         self.assertEqual(Sub.boo.type, bool)
 
         with self.assertRaises(MissingParameterValue):
             Sub().foo
         with self.assertWarns(UntypedParameter):
-            Sub().bad
+            Sub().notyp
 
         self.assertEqual(Sub({"foo": 123}).foo, 123)
         self.assertEqual(Sub({Sub.foo: 123}).foo, 123)

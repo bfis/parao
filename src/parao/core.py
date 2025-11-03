@@ -282,9 +282,11 @@ class HasArguments(Protocol):
 eager = ContextValue[bool]("eager", default=False)
 
 
-class _OwnParameters(dict[str, "AbstractParam"]):
+class OwnParameters(dict[str, "AbstractParam"]):
     __slots__ = "vals"
     vals: set["AbstractParam"]
+
+    class CacheReset(RuntimeWarning): ...
 
     def __init__(self, cls: "ParaOMeta"):
         super().__init__(
@@ -304,11 +306,12 @@ class _OwnParameters(dict[str, "AbstractParam"]):
         if cls.cache:
             warn(
                 "partially filled __own_parameters__ cache reset",
+                cls.CacheReset,
                 skip_file_prefixes=_warn_skip,
             )
         cls.cache.clear()
 
-    cache: dict["ParaOMeta", "_OwnParameters"] = {}
+    cache: dict["ParaOMeta", "OwnParameters"] = {}
 
 
 class ParaOMeta(type):
@@ -317,21 +320,21 @@ class ParaOMeta(type):
         return f"{cls.__module__}:{cls.__qualname__}"
 
     @property
-    def __own_parameters__(cls) -> _OwnParameters:
-        if (val := _OwnParameters.cache.get(cls)) is None:
-            val = _OwnParameters.cache[cls] = _OwnParameters(cls)
+    def __own_parameters__(cls) -> OwnParameters:
+        if (val := OwnParameters.cache.get(cls)) is None:
+            val = OwnParameters.cache[cls] = OwnParameters(cls)
         return val
 
     def __setattr__(cls, name, value):
         if not name.startswith("__"):
-            _OwnParameters.reset()
+            OwnParameters.reset()
             if isinstance(value, AbstractParam):
                 value.__set_name__(cls, name)
         return super().__setattr__(name, value)
 
     def __delattr__(cls, name):
         if not name.startswith("__"):
-            _OwnParameters.reset()
+            OwnParameters.reset()
             if isinstance((old := getattr(cls, name, None)), AbstractParam):
                 old.__set_name__(cls, None)
         return super().__delattr__(name)
