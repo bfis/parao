@@ -5,12 +5,13 @@ from pathlib import Path
 from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
 import sys
 from tempfile import TemporaryDirectory
+from warnings import catch_warnings
 import pytest
 from unittest.mock import Mock, call, patch
 
 from parao.action import ValueAction
 from parao.cli import CLI
-from parao.core import Const, ParaO, Param
+from parao.core import Const, OwnParameters, ParaO, Param
 from parao.output import (
     JSON,
     Dir,
@@ -314,13 +315,15 @@ def test_output_Dir_remove(tmpdir4BaseTask):
 
 
 def test_bad_output():
-    class Foo(Task):
-        def run(): ...
+    with catch_warnings(action="ignore", category=OwnParameters.CacheReset):
 
-        output = None
+        class Foo(Task):
+            def run(): ...
 
-    with pytest.raises(TypeError):
-        Foo().run.output
+            output = None
+
+        with pytest.raises(TypeError):
+            Foo().run.output
 
 
 def test_print(capsys):

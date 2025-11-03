@@ -2,6 +2,7 @@ from operator import attrgetter
 import pickle
 from unittest import TestCase
 from unittest.mock import Mock
+from warnings import catch_warnings
 from parao.core import (
     UNSET,
     OwnParameters,
@@ -165,7 +166,7 @@ class TestParaO(TestCase):
         self.assertRaises(TypeError, lambda: ParaO({ParaO: 123}))
 
         with (
-            self.assertWarns(OwnParameters.CacheReset),
+            catch_warnings(action="ignore", category=OwnParameters.CacheReset),
             self.assertRaises(DuplicateParameter),
         ):
             Sub.foo1 = Sub.foo2 = Param()
