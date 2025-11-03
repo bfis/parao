@@ -9,6 +9,7 @@ class TestCasting(TestCase):
         self.assertEqual(cast("1.3", float), 1.3)
         self.assertEqual(cast("1j", complex), 1j)
         self.assertEqual(cast(123, str), "123")
+        self.assertRaises(TypeError, lambda: cast("y", bool))
 
         # None
         self.assertEqual(cast(None, None), None)

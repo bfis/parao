@@ -121,6 +121,8 @@ class TestCLI(TestCase):
             cli.run(["Outer1", "--tests.test_cli:plain_object=123"])
         # expansion
         self.assertEqual(len(cli.run(["Outer1", "--foo=1,2"])), 2)
+        with self.assertRaises(ValueError):
+            cli.run(["Outer1", "--bar=A,B", "--foo=1,x"])
 
     def test_prio(self):
         cli = CLI()
@@ -130,6 +132,8 @@ class TestCLI(TestCase):
         self.assertEqual(cli.run(["Outer1", "-foo;prio:=9", "-foo=1"])[0].foo, 1)
         self.assertEqual(cli.run(["Outer1", "-foo;prio:1=9", "-foo=1"])[0].foo, 9)
         self.assertEqual(cli.run(["Outer1", "-foo;prio:1.1=9", "-foo=1"])[0].foo, 9)
+        with patch.object(Outer1.foo, "min_prio", 2):
+            self.assertEqual(cli.run(["Outer1", "-foo=3"])[0].foo, 1)
         with self.assertRaises(ValueError):
             cli.run(["Outer1", "-foo;prio:x=9"])
 

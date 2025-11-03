@@ -146,6 +146,7 @@ class TestShash(TestCase):
     def test_parao(self):
         c = Custom(bar="")
         self.assertIs(bin_hash(c), bin_hash(c))
+        self.assertEqual(repr(c), "tests.test_shash:Custom(bar='')")
 
         self.assertEqual(
             hex_hash(Custom(foo=1, bar="val")),

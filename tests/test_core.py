@@ -109,7 +109,14 @@ class TestParam(TestCase):
         self.assertIs(Param[o := object()]().type, o)
         self.assertRaises(TypeError, lambda: Param[int, str])
 
+        # missing name - not really triggerable by user
+        self.assertIs(Param()._name(int), None)
+
     def test_typed_alias(self):
+        class WonkyParam[A, B, C](AbstractParam[B]): ...
+
+        WonkyParam[int, str, bool]()
+
         class Sentinel:
             pass
 
@@ -171,6 +178,20 @@ class TestParaO(TestCase):
         self.assertIsInstance(ParaO({ParaO: Sub}), Sub)
         self.assertIsInstance(ParaO({"__class__": Sub}), Sub)
 
+        # cover some rare branches
+        self.assertIsInstance(
+            ParaO(
+                Arguments(
+                    (
+                        Arguments.from_dict({ParaO: UNSET}),
+                        Arguments.EMPTY,
+                        Arguments.from_dict({ParaO: Sub}),
+                    )
+                )
+            ),
+            Sub,
+        )
+
         self.assertRaises(TypeError, lambda: ParaO({ParaO: 123}))
 
         with (
@@ -178,6 +199,11 @@ class TestParaO(TestCase):
             self.assertRaises(DuplicateParameter),
         ):
             Sub.foo1 = Sub.foo2 = Param()
+
+        self.assertEqual(
+            Sub().__repr__(compact="???"),
+            "tests.test_core:TestParaO.test_create.<locals>.Sub(???)",
+        )
 
     def test_own_params(self):
         class Sub(ParaO):
@@ -200,6 +226,13 @@ class TestParaO(TestCase):
             del Sub.foo, Sub.bar, Sub.boo
 
         self.assertEqual(Sub.__own_parameters__, {})
+
+        with self.assertWarns(OwnParameters.CacheReset):
+            Sub.boo = None
+        del Sub.boo
+
+        Sub.__dunder__ = None
+        del Sub.__dunder__
 
     def test_resolution_simple(self):
 
@@ -279,6 +312,15 @@ class TestParaO(TestCase):
         self.assertEqual(ext2.foo, 1)
         self.assertEqual(ext2.ext1.foo, 0)
 
+    def test_non_eager_parameter(self):
+        class Foo(ParaO):
+            bar = Param[int](eager=False)
+
+        with eager(True):
+            foo = Foo()
+        with self.assertRaises(MissingParameterValue):
+            foo.bar
+
     def test_expansion(self):
 
         class Foo(ParaO):
@@ -292,7 +334,7 @@ class TestParaO(TestCase):
         with eager(True):
             self.assertRaises(Expansion, lambda: Foo(bar=[1, 2, 3]))
             try:
-                Foo(bar=[1, 2, 3])
+                Foo(Arguments.from_dict({"unused": 1}), bar=[1, 2, 3])
             except Expansion as exp:
                 self.assertEqual(exp.param, Foo.bar)
                 self.assertEqual(exp.param_name, "bar")
