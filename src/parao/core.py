@@ -108,11 +108,11 @@ class Fragment:
 
     @property
     def effective_key(self) -> KeyT:
-        if p := self.param:
-            r = (self.types or ()) + (p,)
-            if isinstance(i := self.inner, Fragment):
-                r += i.effective_key
-            return r
+        assert self.param is not None
+        r = (self.types or ()) + (self.param,)
+        if isinstance(i := self.inner, Fragment):
+            r += i.effective_key
+        return r
 
     def __repr__(self):
         return (
@@ -186,18 +186,9 @@ class Arguments(tuple["Arguments | Fragment", ...]):
     def _solve_values(self, ref: "ParaOMeta"):
         com: list[Arguments | Fragment] = []
         val: dict[AbstractParam, Value] = {}
-        sub: defaultdict[AbstractParam, list[Arguments | Fragment]]
-
-        if False:
-            sub = defaultdict(com.copy)  # TODO: optimize this
-        else:  # optimized behaviour
-
-            @defaultdict
-            def sub():
-                nonlocal com
-                if len(com) > 1:
-                    com = [Arguments.from_list(com)]
-                return com.copy()
+        sub: defaultdict[AbstractParam, list[Arguments | Fragment]] = defaultdict(
+            com.copy
+        )
 
         op = ref.__own_parameters__
         for arg in self:
@@ -472,8 +463,8 @@ class TypedAlias(GenericAlias):
         tv2n = self.__class__._typevar2name
         for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
             if name := tv2n.get(tp):
-                if not isinstance(arg, TypeVar):
-                    kwds.setdefault(name, arg)
+                assert not isinstance(arg, TypeVar)  # already registered during init
+                kwds.setdefault(name, arg)
         return super().__call__(*args, **kwds)
 
     @classmethod
@@ -578,15 +569,13 @@ class AbstractParam[T]:
         return typ
 
     def _cast(self, raw, typ):
-
-        if typ is not UNSET:
-            try:
-                exp = cast(raw, Expansion[typ])
-            except TypeError:
-                pass
-            else:
-                if isinstance(exp, Expansion):
-                    raise exp
+        try:
+            exp = cast(raw, Expansion[typ])
+        except TypeError:
+            pass
+        else:
+            if isinstance(exp, Expansion):
+                raise exp
         return cast(raw, typ)
 
     def _get(self, val: Value | None, name: str, instance: "ParaO") -> T:
