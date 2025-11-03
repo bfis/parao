@@ -54,6 +54,9 @@ class ParaONotFound(LookupError): ...
 class NotAParaO(ValueError): ...
 
 
+class ValueMissing(ValueError): ...
+
+
 class Sep(tuple[str, ...]):
     class NeedValues(RuntimeError): ...
 
@@ -326,7 +329,16 @@ class CLI:
                     if value is None:
                         if not pit.peek("+").startswith(("+", "-")):
                             value = next(pit)
-                    if "json" in flags and value:
+                    if "class" in flags or key[-1] == "__class__":
+                        if not value:
+                            raise ValueMissing(arg)
+                        if cls := self.parse_typ(value):
+                            value = cls
+                        else:
+                            raise ParaONotFound(value)
+                    elif "json" in flags:
+                        if not value:
+                            raise ValueMissing(arg)
                         try:
                             value = json.loads(value)
                         except Exception as e:

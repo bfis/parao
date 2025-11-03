@@ -13,6 +13,7 @@ from parao.cli import (
     Sep,
     UnsupportedKeyType,
     UnusedCLIArguments,
+    ValueMissing,
 )
 from parao.core import MissingParameterValue, ParaO, Param
 
@@ -45,6 +46,12 @@ class Outer3(ParaO):
 
 Outer3.__module__ += ".sub"
 Outer3.Inner2.__module__ += ".sub"
+
+
+class MultiWrap(ParaO):
+    inner1 = Param[ParaO]()
+    inner2 = Param[ParaO]()
+
 
 plain_object = object()
 
@@ -85,8 +92,18 @@ class TestCLI(TestCase):
         self.assertEqual(cli.run(["Outer1", "--bar="])[0].bar, "")
         self.assertEqual(cli.run(["Outer1", "--boo"])[0].boo, True)
         self.assertEqual(cli.run(["Outer1", "--boo", "--bar=b"])[0].boo, True)
+        # class
+        with self.assertRaises(ValueMissing):
+            cli.run(["MultiWrap", "--inner1,__class__="])
+        with self.assertRaises(ParaONotFound):
+            cli.run(["MultiWrap", "--inner1,__class__=ThisDoesNotExist"])
+        (wrap,) = cli.run(["MultiWrap", "--inner1,__class__=Outer1"])
+        self.assertIsInstance(wrap.inner1, Outer1)
+        self.assertIsInstance(wrap.inner2, ParaO)
         # json
         self.assertEqual(len(cli.run(["Outer1", "--foo;json", "[1,2,3]"])), 3)
+        with self.assertRaises(ValueMissing):
+            cli.run(["Outer1", "--foo;json="])
         with self.assertRaises(JSONDecodeError):
             cli.run(["Outer1", "--foo;json=]"])
         # with module
@@ -102,6 +119,8 @@ class TestCLI(TestCase):
             cli.run(["Outer1", "--tests.test_cli:=123"])
         with self.assertWarns(UnsupportedKeyType), self.assertRaises(TypeError):
             cli.run(["Outer1", "--tests.test_cli:plain_object=123"])
+        # expansion
+        self.assertEqual(len(cli.run(["Outer1", "--foo=1,2"])), 2)
 
     def test_prio(self):
         cli = CLI()
