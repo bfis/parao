@@ -414,7 +414,13 @@ class ParaO(metaclass=ParaOMeta):
             if param.significant:
                 yield from get_inner_parao(getattr(self, name))
 
-    def __repr__(self, *, compact: bool | str = False):
+    def __repr__(
+        self,
+        *,
+        compact: bool | str = False,
+        param: "AbstractParam" = None,
+        param_name: str = None,
+    ):
         if compact:
             if compact is True:
                 compact = "..."
@@ -425,8 +431,12 @@ class ParaO(metaclass=ParaOMeta):
                 for name, value, neutral in self.__rich_repr__()
                 if value != neutral
             ]
-
-        return f"{self.__class__.__fullname__}({", ".join(items)})"
+        ret = f"{self.__class__.__fullname__}({", ".join(items)})"
+        if param is not None:
+            if param_name is None:
+                param_name = param._name(type(self)) or "???"
+            ret += f".{param_name}={param!r}"
+        return ret
 
     def __rich_repr__(self):
         for name, param in self.__class__.__own_parameters__.items():
@@ -610,7 +620,9 @@ class AbstractParam[T]:
             exp.make = partial(self._solve, val, name, instance, *args)
             return exp
         except Exception as exc:
-            exc.add_note(f"parameter {name}={safe_repr(self)} on {safe_repr(instance)}")
+            exc.add_note(
+                f"param stack: {instance.__repr__(compact=True, param=self, param_name=name)}"
+            )
             raise
 
     def __get__(self, instance: "ParaO", owner: type | None = None) -> T:
@@ -822,8 +834,7 @@ class Expansion[T](BaseException):
         return self.param._name(type(self.source))
 
     def __repr__(self):
-        parts = [f"< {safe_len(self.values)} values >"]
+        parts = [f"<{safe_len(self.values)} values>"]
         if self._frames:
-            parts.append(f"param={self.param}")
-            parts.append(f"source={self.source.__repr__(compact=True)}")
-        return f"{self.__class__.__name__}({', '.join(parts)})"
+            parts.append(f"@ {self.source.__repr__(compact=True, param=self.param)}")
+        return f"{self.__class__.__name__}({' '.join(parts)})"

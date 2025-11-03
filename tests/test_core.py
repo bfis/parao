@@ -290,7 +290,7 @@ class TestParaO(TestCase):
                 self.assertEqual(exp.param_name, "bar")
                 self.assertEqual(exp.values, (1, 2, 3))
 
-        self.assertEqual(repr(Expansion([1, 2, 3])), "Expansion(< 3 values >)")
+        self.assertEqual(repr(Expansion([1, 2, 3])), "Expansion(<3 values>)")
 
     def test_collect(self):
 
