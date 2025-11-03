@@ -147,6 +147,14 @@ class TestParam(TestCase):
             def prop(self):
                 return uniq_return
 
+        with self.assertRaises(AttributeError):
+            Special.prop._on_prop_attr
+        with self.assertRaises(AttributeError):
+            Special.prop.on_func_attr
+
+        Special.prop.func.on_func_attr = attr = object()
+        self.assertIs(Special.prop.on_func_attr, attr)
+
         self.assertIs(Special(const=None).const, uniq_const)
         self.assertIs(Special.prop.aux, uniq_aux)
         self.assertIs(Special().prop, uniq_return)

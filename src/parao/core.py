@@ -675,6 +675,7 @@ class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
     def __getattr__(self, name):
         if not name.startswith("_"):
             return getattr(self.func, name)
+        return super().__getattr__(name)
 
     func: F
 
