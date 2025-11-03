@@ -387,7 +387,9 @@ class ParaO(metaclass=ParaOMeta):
     __args__: Arguments  # | UNSET
 
     def __shash__(self, enc: _SHash) -> bytes:
-        if (res := getattr(self, "__shash", None)) is None:
+        try:
+            res = self.__shash
+        except AttributeError:
             res = self.__shash = enc.coll(
                 self.__class__,
                 (

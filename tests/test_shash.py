@@ -144,6 +144,9 @@ class TestShash(TestCase):
         custom.__shash__.assert_called_once_with(s)
 
     def test_parao(self):
+        c = Custom(bar="")
+        self.assertIs(bin_hash(c), bin_hash(c))
+
         self.assertEqual(
             hex_hash(Custom(foo=1, bar="val")),
             b"e9259685825ceb325388dbc04057aa20c3abe7888cff403a63fb8ae92027a466",
