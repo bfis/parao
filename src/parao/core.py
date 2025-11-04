@@ -24,7 +24,7 @@ from warnings import catch_warnings, warn
 from weakref import WeakKeyDictionary
 
 from .cast import Opaque, cast
-from .misc import ContextValue, safe_len, safe_repr
+from .misc import ContextValue, safe_len
 from .shash import _SHash, bin_hash
 
 __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
@@ -72,7 +72,7 @@ class Value[T: Any]:
             ret.append(repr(self.prio))
         if self.position is not None:
             ret.append(repr(self.position))
-        return f"{self.__class__.__name__}({", ".join(ret)})"
+        return f"{self.__class__.__name__}({', '.join(ret)})"
 
 
 @dataclass(slots=True, frozen=True)
@@ -89,7 +89,9 @@ class Fragment:
         return cls._make(iter(key), value)
 
     @classmethod
-    def _make(cls, it: Iterator[KeyE], value: "Value | Fragment | Arguments"):
+    def _make(
+        cls, it: Iterator[KeyE], value: "Value | Fragment | Arguments"
+    ) -> "Fragment":
         types = []
         for k in it:
             if isinstance(k, type):
@@ -121,7 +123,6 @@ class Fragment:
 
 
 class Arguments(tuple["Arguments | Fragment", ...]):
-
     @classmethod
     def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
         return cls._make(args + (kwargs,)) if kwargs else cls._make(args)
@@ -424,7 +425,7 @@ class ParaO(metaclass=ParaOMeta):
                 for name, value, neutral in self.__rich_repr__()
                 if value != neutral
             ]
-        ret = f"{self.__class__.__fullname__}({", ".join(items)})"
+        ret = f"{self.__class__.__fullname__}({', '.join(items)})"
         if param is not None:
             if param_name is None:
                 param_name = param._name(type(self)) or "???"
@@ -506,9 +507,9 @@ class UntypedWarning(RuntimeWarning):
 class UntypedParameter(UntypedWarning): ...
 
 
-type ExpansionFilter = Collection[KeyE | Collection[KeyE]] | Callable[
-    [Expansion, ParaO], bool
-]
+type ExpansionFilter = (
+    Collection[KeyE | Collection[KeyE]] | Callable[[Expansion, ParaO], bool]
+)
 
 
 class DuplicateParameter(RuntimeError): ...
@@ -826,7 +827,7 @@ class Expansion[T](BaseException):
         return self.param._name(type(self.source))
 
     def __repr__(self):
-        parts = [f"<{safe_len(self.values)} values>"]
+        parts = [f"<{safe_len(self.values, '???')} values>"]
         if self._frames:
-            parts.append(f"@ {self.source.__repr__(compact=True, param=self.param)}")
+            parts.append(f"from {self.source.__repr__(compact=True, param=self.param)}")
         return f"{self.__class__.__name__}({' '.join(parts)})"

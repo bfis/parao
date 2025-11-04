@@ -113,7 +113,9 @@ class TestParam(TestCase):
         self.assertIs(Param()._name(int), None)
 
     def test_typed_alias(self):
-        class WonkyParam[A, B, C](AbstractParam[B]): ...
+        with self.assertWarns(TypedAlias.TypedAliasMismatch):
+
+            class WonkyParam[A, B, C](AbstractParam[B]): ...
 
         WonkyParam[int, str, bool]()
 
@@ -235,7 +237,6 @@ class TestParaO(TestCase):
         del Sub.__dunder__
 
     def test_resolution_simple(self):
-
         class Sub(ParaO):
             foo: int = Param()
             bar = Param(None, type=str)
@@ -259,7 +260,6 @@ class TestParaO(TestCase):
         self.assertEqual(Sub(bar=123).bar, "123")
 
     def test_resolution_complex(self):
-
         class Sub(ParaO):
             foo: int = Param()
             bar: str = Param(None)
@@ -322,7 +322,6 @@ class TestParaO(TestCase):
             foo.bar
 
     def test_expansion(self):
-
         class Foo(ParaO):
             bar = Param[int]()
 
@@ -343,7 +342,6 @@ class TestParaO(TestCase):
         self.assertEqual(repr(Expansion([1, 2, 3])), "Expansion(<3 values>)")
 
     def test_collect(self):
-
         class Foo(ParaO):
             bar = Param[int]()
 
