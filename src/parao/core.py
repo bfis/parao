@@ -83,7 +83,7 @@ class Fragment:
 
     @classmethod
     def make(cls, key: KeyTE, value: "Value | Fragment | Arguments"):
-        assert isinstance(value, (Value, Fragment, Arguments))
+        assert value is None or isinstance(value, (Value, Fragment, Arguments))
         if not isinstance(key, tuple):
             key = (key,)
         return cls._make(iter(key), value)
