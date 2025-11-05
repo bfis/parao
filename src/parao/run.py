@@ -33,15 +33,16 @@ class BaseOutput[T]:
 class RunAct[T](RecursiveAct["RunAction[T]"]):
     __call__: Callable[[], T]
 
-    def _func(self, sub: Iterable[Self], depth, outer) -> T:
-        if self.output.exists:
-            return self.output.load()
+    def _func(self, sub: Iterable[Self], **kwargs) -> T:
+        out = self.output
+        if out.exists:
+            return out.load()
         else:  # TODO: here we need to shim in Pool.map/asnyc
             for s in sub:
                 if not s.done:
-                    s(depth=depth + 1, outer=outer)
+                    s(**kwargs)
 
-            return self.output.dump(self.action.func(self.instance))
+            return out.dump(self.action.func(self.instance))
 
     @cached_property
     def output(self) -> BaseOutput[T]:

@@ -120,28 +120,24 @@ class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
                 if isinstance(other, cls):
                     yield getattr(inner, name)
 
-    def _func(self, sub: Iterable[Self], depth: int, outer: int):
+    def _func(self, sub: Iterable[Self], depth: int = 0, **kwargs):
         if not self.action.func(self.instance, depth):
             for s in sub:
-                s(depth=depth + 1, outer=outer)
+                s(depth=depth + 1, **kwargs)
 
     def __call__(
-        self,
-        override: int | bool | None = None,
-        *,
-        depth: int = 0,
-        outer: int = True,
+        self, override: int | bool | None = None, *, _outer: int = True, **kwargs
     ):
         val = self.value if override is None else override
         if val is UNSET or val is None:
-            val = outer
+            val = _outer
         elif val is False or val < 0:
             return
 
         return self._func(
-            self._inner() if val else (),
-            depth,
-            val is True or val < 1 or val - 1,
+            self._inner() if val else (),  # recusion elements, if (still) allowed
+            _outer=val is True or val < 1 or val - 1,  # remaining recursion
+            **kwargs,  # arbitrary other state, e.g. depth
         )
 
 
