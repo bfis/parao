@@ -58,7 +58,16 @@ class Value[T: Any]:
     prio: PrioT = 0
     position: int = None
 
-    __hash__ = object.__hash__
+    def __hash__(self):
+        return hash((self.__class__, id(self.val), self.prio, self.position))
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, Value)
+            and self.val is other.val
+            and self.prio == other.prio
+            and self.position == other.position
+        )
 
     def __or__(self, other: "Value | None"):
         return self if other is None or self.prio > other.prio else other
