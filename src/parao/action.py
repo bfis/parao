@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from dataclasses import dataclass
 from functools import lru_cache
 from inspect import Parameter, signature
 from operator import attrgetter
@@ -29,14 +30,14 @@ def _method_1st_arg_annotation[T](
     return UNSET
 
 
+@dataclass(slots=True, frozen=True)
 class BaseAct[T, A: "BaseAction"]:
-    __slots__ = ("action", "instance", "value")
+    action: A
+    instance: ParaO
+    value: T
+    position: int = 0
 
-    def __init__(self, action: A, instance: ParaO, value: T, position: int = 0):
-        self.action = action
-        self.instance = instance
-        self.value = value
-        self.position = position
+    def __post_init__(self):
         self._add()
 
     def _add(self):
@@ -47,7 +48,8 @@ class BaseAct[T, A: "BaseAction"]:
     def name(self) -> str:
         return self.action._name(self.instance.__class__)
 
-    __call__: Callable
+    def __call__(self):
+        raise NotImplementedError  # pragma: no cover
 
 
 class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
@@ -72,6 +74,8 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
 
 # simple variant
 class SimpleAct[R](BaseAct[bool, "SimpleAction[R]"]):
+    __slots__ = ()
+
     def _add(self):
         if self.value:
             Plan.add(self)
@@ -89,6 +93,8 @@ class SimpleAction[R](BaseAction[bool, R, []]):
 
 # value variant
 class ValueAct[T, R](BaseAct[T, "ValueAction[T, R]"]):
+    __slots__ = ()
+
     def __call__(self, override: T | Unset = UNSET) -> R:
         value = self.value if override is UNSET else override
         if value is UNSET:
@@ -112,6 +118,8 @@ class ValueAction[T, R](BaseAction[T, R, [T]]):
 
 # recursive variant
 class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
+    __slots__ = ()
+
     def _inner(self):
         name = self.name
         cls = self.action.__class__

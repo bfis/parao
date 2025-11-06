@@ -44,12 +44,15 @@ class RunAct[T](RecursiveAct["RunAction[T]"]):
 
             return out.dump(self.action.func(self.instance))
 
-    @cached_property
-    def output(self) -> BaseOutput[T]:
+    __slots__ = ("output",)
+    output: BaseOutput
+
+    def __post_init__(self):
+        super().__post_init__()
         output = self.action.output or self.instance.output
         if not (isinstance(output, type) and issubclass(output, BaseOutput)):
             raise TypeError(f"{output=} must by a BaseOutput subclass")
-        return output(self)
+        object.__setattr__(self, "output", output(self))  # side-step "frozen"
 
     @property
     def done(self):
