@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
@@ -31,7 +32,7 @@ def _method_1st_arg_annotation[T](
 
 
 @dataclass(slots=True, frozen=True)
-class BaseAct[T, A: "BaseAction"]:
+class BaseAct[T, A: "BaseAction"](ABC):
     action: A
     instance: ParaO
     value: T
@@ -48,8 +49,8 @@ class BaseAct[T, A: "BaseAction"]:
     def name(self) -> str:
         return self.action._name(self.instance.__class__)
 
-    def __call__(self):
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def __call__(self): ...
 
 
 class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):

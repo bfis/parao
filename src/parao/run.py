@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from concurrent.futures import Executor, wait
 from typing import Callable, Iterable, Self, Type
 
@@ -11,24 +12,24 @@ class PseudoOutput(Opaque):
     """Special type that must only be handled directly lest it cause an error."""
 
 
-class BaseOutput[T]:
+class BaseOutput[T](ABC):
     __slots__ = ("act",)
 
     def __init__(self, act: "RunAct[T]"):
         self.act = act
 
     @property
-    def exists(self) -> bool:
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def exists(self) -> bool: ...
 
-    def load(self) -> T:
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def load(self) -> T: ...
 
-    def dump(self, data: T) -> T:
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def dump(self, data: T) -> T: ...
 
-    def remove(self, missing_ok: bool = False) -> None:
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def remove(self, missing_ok: bool = False) -> None: ...
 
 
 class RunAct[T](RecursiveAct["RunAction[T]"]):
@@ -78,11 +79,11 @@ class RunAction[R](BaseRecursiveAction[R, []]):
     output: Type[BaseOutput] | None = None
 
 
-class Runner:
+class Runner(ABC):
     current = ContextValue["Runner | None"]("currentRunner", default=None)
 
-    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict):
-        raise NotImplementedError  # pragma: no cover
+    @abstractmethod
+    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict): ...
 
 
 class ConcurrentRunner(Runner):
