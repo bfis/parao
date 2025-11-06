@@ -88,8 +88,8 @@ class Sep(tuple[str, ...]):
         if frag:
             frag = tuple(map(re.escape, frag))
         if char:
-            frag += (f"[{re.escape("".join(char))}]",)
-        return re.compile(f"(?:{"|".join(frag)})" if len(frag) > 1 else frag[0])
+            frag += (f"[{re.escape(''.join(char))}]",)
+        return re.compile(f"(?:{'|'.join(frag)})" if len(frag) > 1 else frag[0])
 
     def split1(self, string: str) -> tuple[str, str | None]:
         res = self.regex.split(string, 1)
@@ -182,7 +182,6 @@ class CLI:
     prase_raw = CLIParser()
 
     def __init__(self, entry_points: Iterable[ParaOMeta] | None = None):
-
         seen = set()
         queue: list[type] = [ParaO] if entry_points is None else list(entry_points)
         for curr in queue:
@@ -391,7 +390,7 @@ class CLI:
         try:
             yield from Expansion.generate(typ, args)
         except Exception as exc:
-            exc.add_note(f"for arguments: {" ".join(raw)}")
+            exc.add_note(f"for arguments: {' '.join(raw)}")
             raise
 
     def _run(self, args: list[str]):

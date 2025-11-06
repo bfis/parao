@@ -45,7 +45,6 @@ def cast(val: Any, typ: type) -> Any:
 
         # container types
         if isinstance(ori, type):  # pragma: no branch
-
             if isinstance(val, (str, bytes)):
                 raise TypeError(f"can't cast {type(val)} to container")
 

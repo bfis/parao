@@ -4,7 +4,6 @@ from parao.misc import ContextValue, PeekableIter, safe_len, safe_repr, is_subse
 
 class TestContextValue(TestCase):
     def test_defaults(self):
-
         cv = ContextValue("cv")
         sentinel = object()
         self.assertIs(cv(default=sentinel), sentinel)
@@ -12,7 +11,6 @@ class TestContextValue(TestCase):
 
 class TestMisc(TestCase):
     def test_safe(self):
-
         class Foo:
             def __repr__(self):
                 raise RuntimeError()
@@ -24,7 +22,6 @@ class TestMisc(TestCase):
         self.assertEqual(safe_len(Foo(), (o := object())), o)
 
     def test_peekable(self):
-
         tpl = object(), object(), object()
 
         pi = PeekableIter(tpl)

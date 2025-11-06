@@ -129,7 +129,7 @@ class Output[T](BaseOutput[T]):
 
     @property
     def stem(self) -> str:
-        return f"{self.act.name}_{hex_hash(self.act.instance).decode("ascii")}"
+        return f"{self.act.name}_{hex_hash(self.act.instance).decode('ascii')}"
 
     @property
     def suffix(self) -> str:

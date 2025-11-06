@@ -17,7 +17,6 @@ class TestCasting(TestCase):
         self.assertRaises(TypeError, lambda: cast(True, None))
 
     def test_containers(self):
-
         self.assertEqual(cast(["123"], list[int]), [123])
         self.assertEqual(cast({"123"}, set[int]), {123})
         self.assertEqual(cast(frozenset({"123"}), frozenset[int]), frozenset({123}))
