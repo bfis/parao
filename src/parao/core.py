@@ -1,3 +1,4 @@
+from abc import ABCMeta
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache, partial
@@ -315,7 +316,7 @@ class OwnParameters(dict[str, "AbstractParam"]):
     cache: dict["ParaOMeta", "OwnParameters"] = {}
 
 
-class ParaOMeta(type):
+class ParaOMeta(ABCMeta):
     @property
     def __fullname__(cls):
         return f"{cls.__module__}:{cls.__qualname__}"
@@ -327,14 +328,14 @@ class ParaOMeta(type):
         return val
 
     def __setattr__(cls, name, value):
-        if not name.startswith("__"):
+        if not name.startswith("_"):
             OwnParameters.reset()
             if isinstance(value, AbstractParam):
                 value.__set_name__(cls, name)
         return super().__setattr__(name, value)
 
     def __delattr__(cls, name):
-        if not name.startswith("__"):
+        if not name.startswith("_"):
             OwnParameters.reset()
             if isinstance((old := getattr(cls, name, None)), AbstractParam):
                 old.__set_name__(cls, None)
