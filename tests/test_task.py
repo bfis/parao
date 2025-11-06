@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from io import IOBase
 import os
@@ -24,7 +25,7 @@ from parao.output import (
     MoveAcrossFilesystem,
     UntypedOuput,
 )
-from parao.run import PseudoOutput, RunAct
+from parao.run import ConcurrentRunner, PseudoOutput, RunAct
 from parao.task import RunAction, Task, Output, pprint
 
 
@@ -174,9 +175,7 @@ def test_output_other_temp(tmpdir4BaseTask):
             other_fs := os.environ.get(
                 "TEMP2_ON_DIFFERENT_FS", os.environ.get("XDG_RUNTIME_DIR", None)
             )
-        ) and os.stat(tmpdir4BaseTask).st_dev != os.stat(
-            other_fs
-        ):  # pragma: no branch
+        ) and os.stat(tmpdir4BaseTask).st_dev != os.stat(other_fs):  # pragma: no branch
             mock.return_value = Dir.temp(dir=other_fs)
             with (
                 pytest.warns(MoveAcrossFilesystem, match="slow"),
@@ -341,7 +340,6 @@ def test_print(capsys):
 
 def test_status(capsys, tmpdir4BaseTask):
     with patch.object(pprint, "_stream", sys.stdout):
-
         Task2().status()
 
         cap = capsys.readouterr()
@@ -409,3 +407,20 @@ def test_action_ordering():
 
     [foo] = cli.run(["Foo", "--act2=2", "--act1=1"])
     func.assert_has_calls([call(foo, 2), call(foo, 1)])
+
+
+def test_ConcurrentRunner(tmpdir4BaseTask):
+    runner = ConcurrentRunner(ThreadPoolExecutor(1))
+
+    task = Task2()
+    res = task.run()
+
+    task.remove()
+    assert task.run(runner=runner) == res
+    assert task.run.done
+
+    task.remove()
+    with ConcurrentRunner.current(runner):
+        assert task.run() == res
+        assert task.run() == res  # yes twice
+        assert task.run.done

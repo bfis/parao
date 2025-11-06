@@ -1,9 +1,10 @@
-from functools import cached_property
+from concurrent.futures import Executor, wait
 from typing import Callable, Iterable, Self, Type
 
 from .action import BaseRecursiveAction, RecursiveAct
 from .cast import Opaque
 from .core import ParaO
+from .misc import ContextValue
 
 
 class PseudoOutput(Opaque):
@@ -33,16 +34,27 @@ class BaseOutput[T]:
 class RunAct[T](RecursiveAct["RunAction[T]"]):
     __call__: Callable[[], T]
 
-    def _func(self, sub: Iterable[Self], **kwargs) -> T:
-        out = self.output
-        if out.exists:
-            return out.load()
-        else:  # TODO: here we need to shim in Pool.map/asnyc
-            for s in sub:
-                if not s.done:
-                    s(**kwargs)
+    def _func(
+        self, sub: Iterable[Self], runner: "Runner[T] | None" = None, **kwargs
+    ) -> T:
+        if runner is None:
+            runner = Runner.current()
+        if runner is None:
+            if self.done:
+                return self.output.load()
+            else:
+                for s in sub:
+                    if not s.done:
+                        s(**kwargs)
 
-            return out.dump(self.action.func(self.instance))
+                return self._make()
+        else:
+            return runner(self, sub, kwargs)
+
+    def _make(self, output: bool = True):
+        out = self.output.dump(self.action.func(self.instance))
+        if output:
+            return out
 
     __slots__ = ("output",)
     output: BaseOutput
@@ -64,3 +76,23 @@ class RunAction[R](BaseRecursiveAction[R, []]):
     func: Callable[[ParaO], R]
     __get__: Callable[..., RunAct[R]]
     output: Type[BaseOutput] | None = None
+
+
+class Runner:
+    current = ContextValue["Runner | None"]("currentRunner", default=None)
+
+    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict):
+        raise NotImplementedError  # pragma: no cover
+
+
+class ConcurrentRunner(Runner):
+    def __init__(self, executor: Executor):
+        self.executor = executor
+        super().__init__()
+
+    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict):
+        if act.done:
+            return act.output.load()
+        else:
+            wait(self.executor.submit(s, **sub_kwargs) for s in sub if not s.done)
+            return self.executor.submit(act._make).result()
