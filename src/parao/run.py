@@ -26,7 +26,7 @@ class BaseOutput[T](ABC):
     def load(self) -> T: ...
 
     @abstractmethod
-    def dump(self, data: T) -> T: ...
+    def dump(self, data: T | PseudoOutput) -> T: ...
 
     @abstractmethod
     def remove(self, missing_ok: bool = False) -> None: ...
@@ -70,6 +70,10 @@ class RunAct[T](RecursiveAct["RunAction[T]"]):
     @property
     def done(self):
         return self.output.exists
+
+    @property
+    def _key(self):
+        return self.instance, self.action
 
 
 class RunAction[R](BaseRecursiveAction[R, []]):

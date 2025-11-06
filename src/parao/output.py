@@ -239,10 +239,10 @@ class Output[T](BaseOutput[T]):
                 data = self._temp_copy(data)
                 data = data.replace(self.path)
             else:
-                raise  #
+                raise
         return data
 
-    def dump(self, data: T) -> T:
+    def dump(self, data: T | FSOutput) -> T:
         if isinstance(data, FSOutput):
             data = self._dump(data)
             if (
@@ -287,7 +287,7 @@ class Output[T](BaseOutput[T]):
                 yield typ
 
     @property
-    def type(self) -> type | Unset:  # this brick type in here
+    def type(self) -> type | Unset:  # this bricks "type" in here
         action = self.act.action
         return getattr(action.func, "__annotations__", {}).get(
             "return", getattr(action, "return_type", UNSET)
