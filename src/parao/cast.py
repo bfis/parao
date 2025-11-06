@@ -21,16 +21,12 @@ def cast(val: Any, typ: type) -> Any:
     ori = get_origin(typ)
 
     if cast_to := getattr(val, "__cast_to__", None):
-        try:
-            return cast_to(typ, typ0)
-        except NotImplementedError:
-            pass
+        if (ret := cast_to(typ, typ0)) is not NotImplemented:
+            return ret
 
     if cast_from := getattr(ori or typ, "__cast_from__", None):
-        try:
-            return cast_from(val, typ0)
-        except NotImplementedError:
-            pass
+        if (ret := cast_from(val, typ0)) is not NotImplemented:
+            return ret
 
     if isinstance(val, Opaque):
         return val

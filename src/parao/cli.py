@@ -42,7 +42,7 @@ class CLIstr(str):
         if self.empty and typ is bool:
             return True
 
-        raise NotImplementedError
+        return NotImplemented
 
 
 class MalformedCommandline(ValueError): ...

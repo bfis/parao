@@ -721,7 +721,7 @@ class Expansion[T](BaseException):
         if isinstance(result, tuple):
             return cls(result)
         else:
-            raise NotImplementedError
+            return NotImplemented
 
     def __init__(self, values: Iterable[T]):
         super().__init__()

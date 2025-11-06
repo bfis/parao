@@ -51,7 +51,7 @@ class TestCasting(TestCase):
         class Foo:
             @classmethod
             def __cast_from__(cls, value, original_type):
-                raise NotImplementedError
+                return NotImplemented
 
         self.assertRaises(TypeError, lambda: cast(1, Foo))
 
@@ -60,7 +60,7 @@ class TestCasting(TestCase):
                 try:
                     return typ(1.2)
                 except Exception:
-                    raise NotImplementedError
+                    return NotImplemented
 
         self.assertEqual(cast(Bar(), int), 1)
         self.assertRaises(TypeError, lambda: cast(Bar(), list))
