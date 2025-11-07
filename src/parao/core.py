@@ -409,7 +409,11 @@ class ParaO(metaclass=ParaOMeta):
         return res
 
     def __eq__(self, other):
-        return isinstance(self, ParaO) and bin_hash(self) == bin_hash(other)
+        return (
+            isinstance(self, ParaO)
+            and self.__class__ is other.__class__
+            and bin_hash(self) == bin_hash(other)
+        )
 
     def __hash__(self) -> int:
         return int.from_bytes(bin_hash(self)[:8])
@@ -435,7 +439,7 @@ class ParaO(metaclass=ParaOMeta):
             items = [
                 f"{name}={value!r}"
                 for name, value, neutral in self.__rich_repr__()
-                if value != neutral
+                if (value is not UNSET if neutral is UNSET else value != neutral)
             ]
         ret = f"{self.__class__.__fullname__}({', '.join(items)})"
         if param is not None:
