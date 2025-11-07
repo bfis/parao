@@ -299,7 +299,7 @@ class CLI:
             or mod_att[0]
         )
 
-    def parse_args(self, args: list[str]):
+    def parse_args(self, args: list[str], position0: int = 100):
         pre: list[str] = []
         got: list[tuple[ParaOMeta, Arguments, list[str]]] = []
 
@@ -360,7 +360,9 @@ class CLI:
                         prio = 1 - start.count("-") + start.count("+")
 
                     raw.append(arg)
-                    curr.append(Fragment.make(key, Value(value, prio, len(curr))))
+                    curr.append(
+                        Fragment.make(key, Value(value, prio, len(curr) + position0))
+                    )
                 else:
                     if typ is not None:
                         got.append((typ, Arguments(curr), raw))

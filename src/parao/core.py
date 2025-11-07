@@ -59,7 +59,7 @@ type Mapish[K, V] = Mapping[K, V] | Iterable[tuple[K, V]]
 class Value[T: Any]:
     val: T
     prio: PrioT = 0
-    position: int = None
+    position: int = 0
 
     def __hash__(self):
         return hash((self.__class__, id(self.val), self.prio, self.position))
@@ -82,7 +82,7 @@ class Value[T: Any]:
         ret = [repr(self.val)]
         if self.prio:
             ret.append(repr(self.prio))
-        if self.position is not None:
+        if self.position:
             ret.append(repr(self.position))
         return f"{self.__class__.__name__}({', '.join(ret)})"
 

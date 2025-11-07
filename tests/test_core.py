@@ -39,7 +39,7 @@ def test_Value():
     val = Value(uniq_object)
     assert val.val is uniq_object
     assert val.prio == 0
-    assert val.position is None
+    assert val.position == 0
 
     assert repr(Value(None, prio=1, position=1)) == "Value(None, 1, 1)"
 
