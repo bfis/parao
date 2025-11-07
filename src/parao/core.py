@@ -32,7 +32,9 @@ __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
 _warn_skip = (dirname(__file__),)
 
 
-class Unset(Opaque): ...
+class Unset(Opaque):
+    def __repr__(self):
+        return "<UNSET>"
 
 
 UNSET = Unset()

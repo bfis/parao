@@ -32,6 +32,7 @@ def test_unset():
     assert isinstance(UNSET, Unset)
     assert UNSET is Unset()
     assert Unset() is Unset()
+    assert repr(UNSET) == "<UNSET>"
 
 
 def test_Value():
