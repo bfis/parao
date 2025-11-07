@@ -172,7 +172,10 @@ class Arguments(tuple["Arguments | Fragment", ...]):
     ):
         if callable(items := getattr(k2v, "items", None)):
             k2v = items()
-        return cls(Fragment.make(k, Value(v, prio)) for k, v in k2v)
+        return cls(
+            Fragment.make(k, v if isinstance(v, Value) else Value(v, prio))
+            for k, v in k2v
+        )
 
     @classmethod
     def from_list(cls, args: "list[Arguments | Fragment]") -> "Arguments":
