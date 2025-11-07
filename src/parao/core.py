@@ -80,7 +80,7 @@ class Value[T: Any]:
 
     def __repr__(self):
         ret = [repr(self.val)]
-        if self.prio:
+        if self.prio or self.position:
             ret.append(repr(self.prio))
         if self.position:
             ret.append(repr(self.position))

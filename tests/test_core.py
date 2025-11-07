@@ -41,6 +41,8 @@ def test_Value():
     assert val.prio == 0
     assert val.position == 0
 
+    assert repr(Value(None, prio=1)) == "Value(None, 1)"
+    assert repr(Value(None, position=1)) == "Value(None, 0, 1)"
     assert repr(Value(None, prio=1, position=1)) == "Value(None, 1, 1)"
 
 
