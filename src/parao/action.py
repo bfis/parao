@@ -172,11 +172,13 @@ class RecursiveAction(BaseRecursiveAction[bool, [int]]):
 
 class Plan(list[BaseAct]):
     current = ContextValue["Plan"]("currentPlan", default=None)
+    _sorted: bool = False
 
     @classmethod
     def add(cls, act: BaseAct):
         if (curr := cls.current()) is not None:
             curr.append(act)
+            curr._sorted = False
 
     @contextmanager
     def use(self, /, run: bool = False):
@@ -185,7 +187,12 @@ class Plan(list[BaseAct]):
             if run:
                 self.run()
 
+    def sort(self):
+        if not self._sorted:
+            super().sort(key=attrgetter("position"))
+            self._sorted = True
+
     def run(self):
-        self.sort(key=attrgetter("position"))
         while self:
+            self.sort()
             self.pop(0)()
