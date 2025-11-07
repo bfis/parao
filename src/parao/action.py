@@ -39,11 +39,12 @@ class BaseAct[T, A: "BaseAction"](ABC):
     position: int = 0
 
     def __post_init__(self):
-        self._add()
-
-    def _add(self):
-        if self.value is not UNSET:
+        if self.trigger:
             Plan.add(self)
+
+    @property
+    def trigger(self):
+        return self.value is not UNSET
 
     @property
     def name(self) -> str:
@@ -77,9 +78,9 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
 class SimpleAct[R](BaseAct[bool, "SimpleAction[R]"]):
     __slots__ = ()
 
-    def _add(self):
-        if self.value:
-            Plan.add(self)
+    @property
+    def trigger(self):
+        return super().trigger and self.value
 
     def __call__(self) -> R:
         return self.action.func(self.instance)

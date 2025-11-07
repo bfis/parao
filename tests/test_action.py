@@ -19,6 +19,10 @@ class TestAction(TestCase):
             act = SimpleAction(func)
 
         with Plan().use(run=True):
+            foo = Foo()
+        func.assert_not_called()
+
+        with Plan().use(run=True):
             foo = Foo({"act": False})
         func.assert_not_called()
 
