@@ -8,7 +8,7 @@ from parao.action import (
     RecursiveAction,
     ValueAction,
 )
-from parao.core import ParaO, Param, UntypedParameter
+from parao.core import ParaO, Param, Prop, UntypedParameter, Value
 
 
 class TestAction(TestCase):
@@ -110,6 +110,48 @@ class TestAction(TestCase):
         class Foo3(FooBase):
             foo2 = Param[Foo2]()
 
+        class FooMix(FooBase):
+            @Prop
+            def inner(self) -> list[FooBase]:
+                return [Foo1(), Foo2()][::-1]
+
+            @SimpleAction
+            def interrupter(self): ...
+
+        mock.reset_mock()
+        with Plan().use(run=True):
+            mix4 = FooMix({"act": 3, ("inner", "act"): True})
+        mock.assert_has_calls(
+            [
+                call(mix4, 0),
+                call(mix4.inner[0], 1),
+                call(mix4.inner[0].foo1, 2),
+                call(mix4.inner[1], 1),
+            ]
+        )
+        self.assertEqual(mock.call_count, 4)
+
+        mock.reset_mock()
+        with Plan().use(run=True):
+            mix6 = FooMix(
+                {
+                    "act": 3,
+                    "interrupter": Value(True, position=1),
+                    (Foo2, "act"): Value(True, position=2),
+                }
+            )
+        mock.assert_has_calls(
+            [
+                call(mix6, 0),
+                call(mix6.inner[0], 1),
+                call(mix6.inner[0].foo1, 2),
+                call(mix6.inner[1], 1),
+                call(mix6.inner[0], 0),
+                call(mix6.inner[0].foo1, 1),
+            ]
+        )
+        self.assertEqual(mock.call_count, 6)
+
         with Plan().use(run=True):
             foo3 = Foo3(act=True)
         mock.assert_has_calls(
@@ -142,5 +184,3 @@ class TestAction(TestCase):
         mock.return_value = True
         (foo3 := Foo3()).act()
         mock.assert_has_calls([call(foo3, 0)])
-
-        # self.assertEqual(foo3.act, ())

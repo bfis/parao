@@ -136,12 +136,17 @@ class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
                 s(depth=depth + 1, **kwargs)
 
     def __call__(
-        self, override: int | bool | None = None, *, _outer: int = True, **kwargs
+        self, override: int | bool | None = None, *, _outer: int = None, **kwargs
     ):
-        val = self.value if override is None else override
-        if val is UNSET or val is None:
-            val = _outer
-        elif val is False or val < 0:
+        if override is None:
+            val = self.value
+            if val is UNSET:
+                val = True if _outer is None else _outer
+            elif self.trigger:  # pragma: no branch
+                Plan.consume(self)
+        else:
+            val = override
+        if val is False or val < 0:
             return
 
         return self._func(
@@ -179,6 +184,20 @@ class Plan(list[BaseAct]):
         if (curr := cls.current()) is not None:
             curr.append(act)
             curr._sorted = False
+
+    @classmethod
+    def consume(cls, act: BaseAct):
+        if not (curr := cls.current()):
+            return
+        try:
+            idx = curr.index(act)
+        except ValueError:
+            return
+        name = act.name
+        is_peer = act.action.__class__._is_peer
+        if all(a.name == name and is_peer(a.action.__class__) for a in curr[:idx]):
+            del curr[idx]
+            return True
 
     @contextmanager
     def use(self, /, run: bool = False):
