@@ -83,6 +83,9 @@ class RunAction[R](BaseRecursiveAction[R, []]):
     output: Type[BaseOutput] | None = None
 
 
+RunAction._peer_base = RunAction
+
+
 class Runner(ABC):
     current = ContextValue["Runner | None"]("currentRunner", default=None)
 

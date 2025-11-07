@@ -124,10 +124,10 @@ class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
 
     def _inner(self):
         name = self.name
-        cls = self.action.__class__
+        is_peer = self.action.__class__._is_peer
         for inner in self.instance.__inner__:
             if other := inner.__class__.__own_parameters__.get(name):
-                if isinstance(other, cls):
+                if is_peer(other.__class__):
                     yield getattr(inner, name)
 
     def _func(self, sub: Iterable[Self], depth: int = 0, **kwargs):
@@ -152,6 +152,15 @@ class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
 
 
 class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
+    _peer_base: type | None = None
+
+    @classmethod
+    def _is_peer(cls, other_cls: type):
+        if base := cls._peer_base:
+            return issubclass(other_cls, base)
+        else:
+            return other_cls is cls
+
     type = int | bool | None
 
 
