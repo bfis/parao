@@ -1,3 +1,4 @@
+from itertools import count
 import json
 import re
 import sys
@@ -300,6 +301,7 @@ class CLI:
         )
 
     def parse_args(self, args: list[str], position0: int = 100):
+        pos = count(position0)
         pre: list[str] = []
         got: list[tuple[ParaOMeta, Arguments, list[str]]] = []
 
@@ -360,9 +362,7 @@ class CLI:
                         prio = 1 - start.count("-") + start.count("+")
 
                     raw.append(arg)
-                    curr.append(
-                        Fragment.make(key, Value(value, prio, len(curr) + position0))
-                    )
+                    curr.append(Fragment.make(key, Value(value, prio, next(pos))))
                 else:
                     if typ is not None:
                         got.append((typ, Arguments(curr), raw))
