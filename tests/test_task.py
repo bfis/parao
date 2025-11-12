@@ -156,6 +156,17 @@ def test_output_unknown(tmpdir4BaseTask):
             TaskX().run()
 
 
+def test_output_json(tmpdir4BaseTask):
+    with (
+        patch.object(TaskX.run, "return_type", JSON, create=True),
+        patch.object(TaskX.run, "func") as mock,
+    ):
+        mock.return_value = [1, 2, 3]
+        t = TaskX()
+        assert t.run() is mock.return_value
+        assert t.run.output.load() == mock.return_value
+
+
 @contextmanager
 def make_readonly(target):
     target = Path(target)

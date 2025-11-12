@@ -92,6 +92,7 @@ class Coder[T]:
     dump: None | Callable[[T], None] = None
     _: KW_ONLY
     typ: type | None = None
+    text: bool = False
 
     @property
     def is_dir(self):
@@ -106,16 +107,21 @@ class Coder[T]:
             return isinstance(hint, type) and issubclass(hint, self.typ)
 
     def conform(self, data: FSOutput) -> T:
-        assert self.typ is not None
         if (have := self.is_dir) != (want := data.is_dir()):
             have = "directory" if have else "file"
             want = "directory" if want else "file"
             exc = IsADirectoryError if have else NotADirectoryError
             raise exc(f"got {have} expected a {want}")
-        if not isinstance(data, self.typ):
-            warn(f"got a {type(data)}, expected a {self.typ}", Inconsistent)
-            data = self.typ(data)
+        if (ftyp := self.typ) is None:
+            ftyp = FSOutput
+        if not isinstance(data, ftyp):
+            warn(f"got a {type(data)}, expected a {ftyp}", Inconsistent)
+            data = ftyp(data)
         return data
+
+    @property
+    def bt_mode(self):
+        return "t" if self.text else "b"
 
 
 class Output[T](BaseOutput[T]):
@@ -154,7 +160,7 @@ class Output[T](BaseOutput[T]):
     _coders: list[Coder] = [
         Coder(".dir", typ=Dir),
         Coder(".file", typ=File),
-        Coder(".json", JSON, json.load, json.dump),
+        Coder(".json", JSON, json.load, json.dump, text=True),
         Coder(".pkl", Pickle, pickle.load, pickle.dump, typ=object),
     ]
 
@@ -189,7 +195,7 @@ class Output[T](BaseOutput[T]):
             return ret if is_dir else ret.joinpath(path.with_stem("temp").name)
 
         if mode is None:
-            mode = "wb"
+            mode = "w" + self.coder.bt_mode
 
         return self._ftype.temp(mode, **dps, **kwargs)
 
@@ -256,7 +262,7 @@ class Output[T](BaseOutput[T]):
         elif callable(dump := self.coder.dump):
             if isinstance(data, PseudoOutput):
                 raise NotSupported(f"wont handle {type(data)}")
-            tmp = self.temp("wb")
+            tmp = self.temp("w" + self.coder.bt_mode)
             dump(data, tmp.tmpio)
             self._dump(tmp)
             return data
