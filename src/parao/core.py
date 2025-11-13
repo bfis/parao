@@ -29,7 +29,8 @@ from .misc import ContextValue, safe_len
 from .shash import _SHash, bin_hash
 
 __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
-_warn_skip = (dirname(__file__),)
+
+ewarn = partial(warn, skip_file_prefixes=(dirname(__file__),))
 
 
 class Unset(Opaque):
@@ -311,11 +312,7 @@ class OwnParameters(dict[str, "AbstractParam"]):
     @classmethod
     def reset(cls):
         if cls.cache:
-            warn(
-                "partially filled __own_parameters__ cache reset",
-                cls.CacheReset,
-                skip_file_prefixes=_warn_skip,
-            )
+            ewarn("partially filled __own_parameters__ cache reset", cls.CacheReset)
         cls.cache.clear()
 
     cache: dict["ParaOMeta", "OwnParameters"] = {}
@@ -497,7 +494,7 @@ class TypedAlias(GenericAlias):
             if got != name:
                 raise cls.TypedAliasClash(f"{tv} wants {name!r} already got {got!r}")
             else:
-                warn(str(tv), cls.TypedAliasRedefined, skip_file_prefixes=_warn_skip)
+                ewarn(str(tv), cls.TypedAliasRedefined)
         else:
             cls._typevar2name[tv] = name
 
@@ -516,11 +513,7 @@ class UntypedWarning(RuntimeWarning):
     def warn(cls, param: "AbstractParam", instance: "ParaO", name: str | None = None):
         if name is None:
             name = param._name(type(instance))
-        warn(
-            f"{type(param)} {name} on {type(instance)}",
-            category=cls,
-            skip_file_prefixes=_warn_skip,
-        )
+        ewarn(f"{type(param)} {name} on {type(instance)}", category=cls)
 
 
 class UntypedParameter(UntypedWarning): ...
@@ -811,7 +804,7 @@ class Expansion[T](BaseException):
             ):
                 if not rkey:
                     rkey.append(name if use_name else param)
-                    warn(
+                    ewarn(
                         f"force added {rkey[0]!r}",
                         ExpansionGeneratedKeyMissingParameter,
                     )

@@ -1,6 +1,5 @@
 from collections import defaultdict
-from .core import AbstractParam, Fragment, KeyTE, ParaO, get_inner_parao
-from warnings import warn
+from .core import AbstractParam, Fragment, KeyTE, ParaO, get_inner_parao, ewarn
 
 
 def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
@@ -43,7 +42,7 @@ def find_value(self: ParaO, key: KeyTE):
             value0 = param0.__get__(inst0)
         if param.__get__(inst) == value0:
             if first:
-                warn(str(key), MultipleSameValues, stacklevel=2)
+                ewarn(str(key), MultipleSameValues, stacklevel=2)
                 first = False
         else:
             raise InconsistentValues(str(key))

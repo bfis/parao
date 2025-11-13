@@ -9,7 +9,6 @@ from functools import cached_property
 from importlib import import_module
 from operator import attrgetter
 from typing import Iterable, get_origin
-from warnings import warn
 
 from .action import Plan
 from .cast import cast
@@ -22,6 +21,7 @@ from .core import (
     ParaOMeta,
     Value,
     eager,
+    ewarn,
 )
 from .misc import PeekableIter, is_subseq
 
@@ -221,13 +221,13 @@ class CLI:
 
                 if num := len(cand):
                     if num > 1:
-                        w = MultipleCandidates
+                        warning = MultipleCandidates
                     else:
                         if ret := next(iter(cand)):
                             return ret
                         else:
-                            w = AmbigouusCandidate
-                    warn(f"{module}:{attr}" if module else attr, w)
+                            warning = AmbiguousCandidate
+                    ewarn(f"{module}:{attr}" if module else attr, warning)
 
         return func
 
@@ -279,7 +279,7 @@ class CLI:
 
             if not isinstance(ret, typ):  # pragma: no branch
                 if issubclass(typ_bad, Warning):
-                    warn(repr(ret), typ_bad)
+                    ewarn(repr(ret), typ_bad)
                 else:
                     raise typ_bad(repr(ret))
 
@@ -382,9 +382,9 @@ class CLI:
 
     def _wrap(self, pre: list[str], post: list[str]):
         if pre:
-            warn(f"{pre=}", UnusedCLIArguments)
+            ewarn(f"at begin: {' '.join(pre)}", UnusedCLIArguments)
         if post:
-            warn(f"{post=}", UnusedCLIArguments)
+            ewarn(f"at end: {' '.join(post)}", UnusedCLIArguments)
 
         return nullcontext(self._consume)
 
