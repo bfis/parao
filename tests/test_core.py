@@ -105,6 +105,38 @@ def test_Arguments():
         == "Arguments(Fragment('foo', None, Value(123)), Fragment('bar', None, Value(456)))"
     )
 
+    args = Arguments(
+        [
+            Fragment.make(("foo",), Value(uniq_object, 1)),
+            Fragment.make(("foo", "bar"), Value(uniq_object, 2)),
+            Fragment.make(
+                ("boo",),
+                Arguments(
+                    [
+                        Fragment.make(("sub",), Value(uniq_object, 3)),
+                        Fragment.make(("sub", "bar"), Value(uniq_object, 4)),
+                    ]
+                ),
+            ),
+            Arguments(
+                [
+                    Fragment.make(("nest",), Value(uniq_object, 5)),
+                ]
+            ),
+        ]
+    )
+    assert list(args.enumerate(nested=False)) == [
+        (args[0], args[0].inner),
+        (args[1], args[1].inner.inner),
+    ]
+    assert list(args.enumerate(nested=True)) == [
+        (args[0], args[0].inner),
+        (args[1], args[1].inner.inner),
+        (args[2], args[2].inner[0], args[2].inner[0].inner),
+        (args[2], args[2].inner[1], args[2].inner[1].inner.inner),
+        (args[3][0], args[3][0].inner),
+    ]
+
 
 class TestParam(TestCase):
     def test_param(self):

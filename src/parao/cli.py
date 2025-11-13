@@ -164,19 +164,25 @@ class CLIParser:
         )
 
 
-class NoAttributeBoundary(RuntimeWarning): ...
-
-
 class UnsupportedKeyType(RuntimeWarning): ...
 
 
 class MultipleCandidates(RuntimeWarning): ...
 
 
-class AmbigouusCandidate(RuntimeWarning): ...
+class AmbiguousCandidate(RuntimeWarning): ...
 
 
-class UnusedCLIArguments(RuntimeWarning): ...
+class UnusedOptions(RuntimeWarning):
+    "Thse auxiliary options was not used."
+
+
+class UnmatchedArguments(RuntimeWarning):
+    "These arguments never matched with any parameter - often caused typos."
+
+
+class UnusedArguments(UnmatchedArguments):
+    "These arguments matched some parameter(s) but were never used - often caused by being overshadowed by others."
 
 
 class CLI:
@@ -382,9 +388,9 @@ class CLI:
 
     def _wrap(self, pre: list[str], post: list[str]):
         if pre:
-            ewarn(f"at begin: {' '.join(pre)}", UnusedCLIArguments)
+            ewarn(f"at begin: {' '.join(pre)}", UnusedOptions)
         if post:
-            ewarn(f"at end: {' '.join(post)}", UnusedCLIArguments)
+            ewarn(f"at end: {' '.join(post)}", UnusedOptions)
 
         return nullcontext(self._consume)
 
@@ -394,6 +400,16 @@ class CLI:
         except Exception as exc:
             exc.add_note(f"for arguments: {' '.join(raw)}")
             raise
+        finally:
+            if unused := {f: v in Value.seen for f, v in args.enumerate(used=False)}:
+                for warning, val in [
+                    (UnmatchedArguments, False),
+                    (UnusedArguments, True),
+                ]:
+                    if names := [
+                        r for arg, r in zip(args, raw[1:]) if unused.get(arg) is val
+                    ]:
+                        ewarn(" ".join(names), warning)
 
     def _run(self, args: list[str]):
         pre, got, post = self.parse_args(args)

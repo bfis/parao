@@ -22,7 +22,7 @@ from typing import (
     overload,
 )
 from warnings import catch_warnings, warn
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, WeakSet
 
 from .cast import Opaque, cast
 from .misc import ContextValue, safe_len
@@ -56,11 +56,14 @@ type PrioT = int | float
 type Mapish[K, V] = Mapping[K, V] | Iterable[tuple[K, V]]
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(slots=True, frozen=True, weakref_slot=True)
 class Value[T: Any]:
     val: T
     prio: PrioT = 0
     position: int = 0
+
+    used = WeakSet["Value"]()
+    seen = WeakSet["Value"]()
 
     def __hash__(self):
         return hash((self.__class__, id(self.val), self.prio, self.position))
@@ -197,7 +200,9 @@ class Arguments(tuple["Arguments | Fragment", ...]):
             su = Arguments.from_list(su)
         else:
             su = com
-        return su, val.get(param)
+        if va := val.get(param):
+            Value.used.add(va)
+        return su, va
 
     @lru_cache
     def _solve_values(self, ref: "ParaOMeta"):
@@ -219,6 +224,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                     com.append(co)  # must be done after filling sub
             elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
                 if isinstance((v := arg.inner), Value):
+                    Value.seen.add(v)
                     val[k] = val.get(k) | v
                     if arg.types:  # do we want this?
                         sub.get(k, com).append(arg)
@@ -254,6 +260,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                 and isinstance((r := arg.inner), Value)
                 and arg.is_type_ok(res.val)
             ):
+                Value.seen.add(r)
                 if arg.param:
                     alt = True
                 else:
@@ -265,6 +272,8 @@ class Arguments(tuple["Arguments | Fragment", ...]):
             if res.val is UNSET:
                 res = res0
 
+        if res is not res0:
+            Value.used.add(res)
         return self.from_list(sub) if alt else self, None if res is res0 else res
 
     def get_root_of(self, seek: Value) -> Fragment | None:
@@ -277,6 +286,39 @@ class Arguments(tuple["Arguments | Fragment", ...]):
             elif isinstance(curr, Arguments):
                 if sub := curr.get_root_of(seek):
                     return sub
+
+    def enumerate(
+        self,
+        used: bool | None = None,
+        seen: bool | None = None,
+        nested: bool = False,
+    ):
+        it = iter(self)
+        done = {self}
+        stack = [(it, tuple[Fragment, ...]())]
+
+        while stack:
+            it, path = stack[-1]
+            for arg0 in it:
+                arg = arg0
+                while isinstance(arg, Fragment):
+                    arg = arg.inner
+                arg0: Fragment
+                if isinstance(arg, Arguments):
+                    if nested and arg not in done:
+                        if arg is not arg0:
+                            path += (arg0,)
+                        it = iter(arg)
+                        done.add(arg)
+                        stack.append((it, path))
+                        break
+                else:
+                    if (used is None or used == (arg in Value.used)) and (
+                        seen is None or seen == (arg in Value.seen)
+                    ):
+                        yield path + ((arg,) if arg is arg0 else (arg0, arg))
+            else:
+                stack.pop()
 
 
 Arguments.EMPTY = Arguments()
