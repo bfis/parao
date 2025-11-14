@@ -232,6 +232,8 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                     sub[k].append(v)
             else:
                 com.append(arg)
+                for vs in sub.values():
+                    vs.append(arg)
 
         if val or sub:
             return Arguments.from_list(com), val, sub

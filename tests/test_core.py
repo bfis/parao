@@ -327,11 +327,14 @@ class TestParaO(TestCase):
         self.assertEqual(Wrap(one=Sub(foo=123)).one.foo, 123)
         self.assertIs(Wrap(one=(s := Sub())).one, s)
 
-        # self.assertEqual(More().inner)
+        obj = Wrap({(Sub, "foo"): 123})
+        self.assertEqual(obj.one.foo, 123)
+        self.assertEqual(obj.other.foo, 123)
 
-        # obj = Wrap({(Sub, "foo"): 123})
-        # self.assertEqual(obj.one.foo, 123)
-        # self.assertEqual(obj.other.foo, 123)
+        # late commons
+        self.assertEqual(
+            Wrap({"foo": 321}, {("one", "N_A"): 123, "foo": 123}).one.foo, 123
+        )
 
     def test_common_base(self):
         class Base(ParaO):
