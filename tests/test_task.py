@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import partial
 from io import IOBase
+import json
 import os
 from pathlib import Path
 from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
@@ -15,6 +17,7 @@ from parao.cli import CLI
 from parao.core import Const, OwnParameters, ParaO, Param
 from parao.output import (
     JSON,
+    Coder,
     Dir,
     FSOutput,
     File,
@@ -164,6 +167,25 @@ def test_output_json(tmpdir4BaseTask):
         mock.return_value = [1, 2, 3]
         t = TaskX()
         assert t.run() is mock.return_value
+        assert t.run.output.load() == mock.return_value
+
+
+def test_output_extraCoder(tmpdir4BaseTask):
+    type JSON2[T] = T
+
+    coders_extra = (
+        Coder(".json", JSON2, json.load, partial(json.dump, indent=2), text=True),
+    )
+
+    with (
+        patch.object(TaskX.output, "coders_extra", coders_extra),
+        patch.object(TaskX.run, "return_type", JSON2, create=True),
+        patch.object(TaskX.run, "func") as mock,
+    ):
+        mock.return_value = [1, 2, 3]
+        t = TaskX()
+        assert t.run() is mock.return_value
+        assert t.run.output.path.read_text() == "[\n  1,\n  2,\n  3\n]"
         assert t.run.output.load() == mock.return_value
 
 

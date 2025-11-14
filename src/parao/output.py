@@ -1,3 +1,4 @@
+from itertools import chain
 import json
 import pickle
 from dataclasses import KW_ONLY, dataclass
@@ -7,7 +8,15 @@ from pathlib import Path
 from shutil import copy2, copytree, rmtree
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import GenericAlias, UnionType
-from typing import Callable, Iterable, Type, TypeAliasType, _AnnotatedAlias, overload
+from typing import (
+    Callable,
+    Iterable,
+    Sequence,
+    Type,
+    TypeAliasType,
+    _AnnotatedAlias,
+    overload,
+)
 from warnings import warn
 
 from .core import UNSET, Unset, UntypedWarning
@@ -151,18 +160,19 @@ class Output[T](BaseOutput[T]):
         if not typs:
             UntypedOuput.warn(self.act.action, self.act.instance)
             return self._coders[-1]
-        for enc in self._coders:
+        for enc in chain(self.coders_extra, self._coders):
             for typ in typs:
                 if enc.match(typ):
                     return enc
         raise NotSupported(f"no coder for {typ}")
 
-    _coders: list[Coder] = [
+    coders_extra: Sequence[Coder] = ()
+    _coders = (
         Coder(".dir", typ=Dir),
         Coder(".file", typ=File),
         Coder(".json", JSON, json.load, json.dump, text=True),
         Coder(".pkl", Pickle, pickle.load, pickle.dump, typ=object),
-    ]
+    )
 
     @property
     def _tmp_base(self) -> Path:
