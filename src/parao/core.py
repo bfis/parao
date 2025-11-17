@@ -1,5 +1,4 @@
 from abc import ABCMeta
-from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache, partial
 from itertools import count
@@ -138,6 +137,60 @@ class Fragment:
         )
 
 
+@lru_cache
+class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
+    __slots__ = ("_com", "_val")
+    _com: "Arguments"  # a list during __init__
+
+    def __call__(self, key: "AbstractParam") -> tuple["Arguments", Value | None]:
+        if su := self.get(key):  # could use .pop
+            su = Arguments.from_list(su)
+        else:
+            su = self._com
+        if va := self._val.get(key):
+            Value.used.add(va)
+        return su, va
+
+    def __init__(self, args: "Arguments", ref: "ParaOMeta"):
+        super().__init__()
+        com: list["Arguments | Fragment"]
+        val: dict["AbstractParam", Value]
+        self._com = com = []
+        self._val = val = {}
+
+        op = ref.__own_parameters__
+        for arg in args:
+            if isinstance(arg, Arguments):
+                oth = _Solution(arg, ref)
+                for k, v in oth._val.items():
+                    val[k] = val.get(k) | v
+                for k, v in oth.items():
+                    self[k].extend(v)
+                if co := oth._com:
+                    com.append(co)  # must be done after filling sub
+            elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
+                if isinstance((v := arg.inner), Value):
+                    Value.seen.add(v)
+                    val[k] = val.get(k) | v
+                    if arg.types:  # do we want this?
+                        self.get(k, com).append(arg)
+                else:
+                    self[k].append(v)
+            else:
+                com.append(arg)
+                for vs in self.values():
+                    vs.append(arg)
+
+        if self or val:
+            self._com = Arguments.from_list(com)
+        else:
+            self._com = args
+
+    def __missing__(self, key: "AbstractParam") -> list["Arguments | Fragment"]:
+        self[key] = ret = self._com.copy()
+        return ret
+
+
 class Arguments(tuple["Arguments | Fragment", ...]):
     @classmethod
     def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
@@ -195,50 +248,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         return self.__class__.__name__ + (tuple.__repr__(self) if self else "()")
 
     def solve_value(self, param, owner, name) -> tuple["Arguments", "Value | None"]:
-        com, val, sub = self._solve_values(owner)
-        if su := sub.get(param):
-            su = Arguments.from_list(su)
-        else:
-            su = com
-        if va := val.get(param):
-            Value.used.add(va)
-        return su, va
-
-    @lru_cache
-    def _solve_values(self, ref: "ParaOMeta"):
-        com: list[Arguments | Fragment] = []
-        val: dict[AbstractParam, Value] = {}
-        sub: defaultdict[AbstractParam, list[Arguments | Fragment]] = defaultdict(
-            com.copy
-        )
-
-        op = ref.__own_parameters__
-        for arg in self:
-            if isinstance(arg, Arguments):
-                co, va, su = arg._solve_values(ref)
-                for k, v in va.items():
-                    val[k] = val.get(k) | v
-                for k, v in su.items():
-                    sub[k].extend(v)
-                if co:
-                    com.append(co)  # must be done after filling sub
-            elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
-                if isinstance((v := arg.inner), Value):
-                    Value.seen.add(v)
-                    val[k] = val.get(k) | v
-                    if arg.types:  # do we want this?
-                        sub.get(k, com).append(arg)
-                else:
-                    sub[k].append(v)
-            else:
-                com.append(arg)
-                for vs in sub.values():
-                    vs.append(arg)
-
-        if val or sub:
-            return Arguments.from_list(com), val, sub
-        else:
-            return self, {}, {}
+        return _Solution(self, owner)(param)
 
     @lru_cache
     def solve_class(
@@ -335,7 +345,7 @@ eager = ContextValue[bool]("eager", default=False)
 
 
 class OwnParameters(dict[str, "AbstractParam"]):
-    __slots__ = "vals"
+    __slots__ = ("vals",)
     vals: set["AbstractParam"]
 
     class CacheReset(RuntimeWarning): ...

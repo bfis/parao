@@ -294,6 +294,8 @@ class TestParaO(TestCase):
         self.assertEqual(Sub().bar, None)
         self.assertEqual(Sub(bar=123).bar, "123")
 
+        self.assertEqual(Sub({("foo", "N_A"): 123, "N_A": "", "foo": 321}).foo, 321)
+
     def test_resolution_complex(self):
         class Sub(ParaO):
             foo: int = Param()
