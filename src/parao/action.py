@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from inspect import Parameter, signature
 from operator import attrgetter
-from typing import Any, Callable, Concatenate, Iterable, Self, Type
+from typing import Any, Callable, Concatenate, Iterable, Self, Type, overload
 
 from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, Value, eager
 from .misc import ContextValue
@@ -71,7 +71,12 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
     def _collect(self, expansion, instance):  # can't collect
         return False  # pragma: no cover
 
-    __get__: Callable[..., BaseAct[T, Self]]
+    @overload
+    def __get__(self, inst: ParaO, owner: type | None = None) -> BaseAct[T, Self]: ...
+    @overload
+    def __get__(self, inst: None, owner: type | None = None) -> Self: ...
+
+    del __get__  # don't overwrite the undelying __get__
 
 
 # simple variant
@@ -119,7 +124,7 @@ class ValueAction[T, R](BaseAction[T, R, [T]]):
 
 
 # recursive variant
-class RecursiveAct[A: "RecursiveAction"](BaseAct[int | bool | None, A]):
+class RecursiveAct[A: "BaseRecursiveAction"](BaseAct[int | bool | None, A]):
     __slots__ = ()
 
     def _inner(self):

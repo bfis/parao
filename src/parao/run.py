@@ -32,12 +32,12 @@ class BaseOutput[T](ABC):
     def remove(self, missing_ok: bool = False) -> None: ...
 
 
-class RunAct[T](RecursiveAct["RunAction[T]"]):
-    __call__: Callable[[], T]
+class RunAct[R](RecursiveAct["RunAction[R]"]):
+    __call__: Callable[[], R]
 
     def _func(
-        self, sub: Iterable[Self], runner: "Runner[T] | None" = None, **kwargs
-    ) -> T:
+        self, sub: Iterable[Self], runner: "Runner[R] | None" = None, **kwargs
+    ) -> R:
         if runner is None:
             runner = Runner.current()
         if runner is None:
@@ -58,7 +58,7 @@ class RunAct[T](RecursiveAct["RunAction[T]"]):
             return out
 
     __slots__ = ("output",)
-    output: BaseOutput
+    output: BaseOutput[R]
 
     def __post_init__(self):
         super().__post_init__()
@@ -80,17 +80,19 @@ class RunAction[R](BaseRecursiveAction[R, []]):
     _act: Type[RunAct[R]] = RunAct
     func: Callable[[ParaO], R]
     __get__: Callable[..., RunAct[R]]
-    output: Type[BaseOutput] | None = None
+    output: Callable[[RunAct[R]], BaseOutput[R]] | None = None
 
 
 RunAction._peer_base = RunAction
 
 
-class Runner(ABC):
+class Runner[R](ABC):
     current = ContextValue["Runner | None"]("currentRunner", default=None)
 
     @abstractmethod
-    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict): ...
+    def __call__(
+        self, act: RunAct[R], sub: Iterable[RunAct], sub_kwargs: dict
+    ) -> R: ...
 
 
 class ConcurrentRunner(Runner):
@@ -98,7 +100,7 @@ class ConcurrentRunner(Runner):
         self.executor = executor
         super().__init__()
 
-    def __call__[T](self, act: RunAct[T], sub: Iterable[RunAct], sub_kwargs: dict):
+    def __call__(self, act: RunAct, sub: Iterable[RunAct], sub_kwargs: dict):
         if act.done:
             return act.output.load()
         else:
