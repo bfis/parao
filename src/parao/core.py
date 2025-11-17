@@ -704,9 +704,11 @@ class AbstractParam[T]:
     @overload
     def __get__(self, instance: "ParaO", owner: type | None = None) -> T: ...
     @overload
-    def __get__(self, instance: None, owner: type | None = None) -> Self: ...
+    def __get__(self, instance: None | Any, owner: type | None = None) -> Self: ...
 
-    def __get__(self, instance: "None | ParaO", owner: type | None = None) -> Self | T:
+    def __get__(
+        self, instance: "None | Any | ParaO", owner: type | None = None
+    ) -> Self | T:
         if instance is None:
             return self
         cls = type(instance)
