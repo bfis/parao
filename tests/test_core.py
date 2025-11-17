@@ -338,6 +338,34 @@ class TestParaO(TestCase):
             Wrap({"foo": 321}, {("one", "N_A"): 123, "foo": 123}).one.foo, 123
         )
 
+    def test_gatekeeper(self):
+        class Sub(ParaO):
+            foo = Param[int]()
+            bar = Param[str](None)
+
+        class Wrap(ParaO):
+            main = Param[Sub]()
+            gated = Param[Sub](gatekeeper=True)
+
+        w = Wrap(foo=123, bar="boo")
+        self.assertEqual(w.main.foo, 123)
+        self.assertEqual(w.main.bar, "boo")
+        self.assertRaises(MissingParameterValue, lambda: w.gated.foo)
+        self.assertEqual(w.gated.bar, None)
+
+        w2 = Wrap(gated=Arguments.make(foo=321), foo=123)
+        self.assertEqual(w2.main.foo, 123)
+        self.assertEqual(w2.gated.foo, 321)
+
+        w3 = Wrap({(Sub, "foo"): 123})
+        self.assertEqual(w3.main.foo, 123)
+        self.assertEqual(w3.gated.foo, 123)
+
+        # triggers "late commons" sub append skip
+        w4 = Wrap({("gated", "foo"): 321, "foo": 123})
+        self.assertEqual(w4.main.foo, 123)
+        self.assertEqual(w4.gated.foo, 321)
+
     def test_common_base(self):
         class Base(ParaO):
             foo = Param[int](0)

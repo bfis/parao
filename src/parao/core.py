@@ -139,14 +139,15 @@ class Fragment:
 
 @lru_cache
 class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
-    __slots__ = ("_com", "_val")
+    __slots__ = ("_com", "_gat", "_val")
     _com: "Arguments"  # a list during __init__
+    _gat: "Arguments"  # a list during __init__
 
     def __call__(self, key: "AbstractParam") -> tuple["Arguments", Value | None]:
         if su := self.get(key):  # could use .pop
             su = Arguments.from_list(su)
         else:
-            su = self._com
+            su = self._gat if key.gatekeeper else self._com
         if va := self._val.get(key):
             Value.used.add(va)
         return su, va
@@ -154,9 +155,12 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
     def __init__(self, args: "Arguments", ref: "ParaOMeta"):
         super().__init__()
         com: list["Arguments | Fragment"]
+        gat: list["Arguments | Fragment"]
         val: dict["AbstractParam", Value]
         self._com = com = []
+        self._gat = gat = []
         self._val = val = {}
+        div: bool = False  # com & gat diverged
 
         op = ref.__own_parameters__
         for arg in args:
@@ -166,8 +170,13 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
                     val[k] = val.get(k) | v
                 for k, v in oth.items():
                     self[k].extend(v)
+                # must be done after filling sub
                 if co := oth._com:
-                    com.append(co)  # must be done after filling sub
+                    com.append(co)
+                if ga := oth._gat:
+                    gat.append(ga)
+                if len(ga) < len(co):
+                    div = True
             elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
                 if isinstance((v := arg.inner), Value):
                     Value.seen.add(v)
@@ -178,16 +187,24 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
                     self[k].append(v)
             else:
                 com.append(arg)
-                for vs in self.values():
-                    vs.append(arg)
+                if typd := bool(arg.types):
+                    gat.append(arg)
+                for k, vs in self.items():
+                    if typd or not k.gatekeeper:
+                        vs.append(arg)
 
         if self or val:
             self._com = Arguments.from_list(com)
         else:
             self._com = args
+        if div or len(gat) < len(com):
+            self._gat = Arguments.from_list(gat)
+        else:
+            self._gat = args
 
     def __missing__(self, key: "AbstractParam") -> list["Arguments | Fragment"]:
-        self[key] = ret = self._com.copy()
+        src = self._gat if key.gatekeeper else self._com
+        self[key] = ret = src.copy()
         return ret
 
 
@@ -598,6 +615,7 @@ def _get_type_hints(cls: "ParaOMeta"):
 ### actual code
 class AbstractParam[T]:
     significant: bool = True
+    gatekeeper: bool = False
     neutral: T = UNSET
 
     TypedAlias.register(T, "type")
