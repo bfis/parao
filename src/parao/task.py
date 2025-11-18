@@ -12,7 +12,7 @@ pprint = PPrint()
 class Task[R](ParaO):
     code_version: Const
     run: RunAction[R]
-    output: Callable[[RunAct[R]], Output[R]] | Type[Output[R]] = Output
+    output: Callable[[RunAct], Output[R]] | Type[Output[R]] = Output
 
     def __init_subclass__(cls):
         v = cls.__dict__.get("code_version")

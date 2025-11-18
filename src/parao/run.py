@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import Executor, wait
-from typing import Callable, Iterable, Self
+from typing import TYPE_CHECKING, Callable, Iterable, Self, overload
 
 from .action import BaseRecursiveAction, RecursiveAct
 from .cast import Opaque
@@ -32,7 +32,7 @@ class BaseOutput[T](ABC):
     def remove(self, missing_ok: bool = False) -> None: ...
 
 
-class RunAct[R](RecursiveAct[R, "RunAction[R]"]):
+class RunAct[R, A: RunAction, I: ParaO](RecursiveAct[R, A, I]):
     __call__: Callable[[], R]
 
     def _func(
@@ -76,9 +76,19 @@ class RunAct[R](RecursiveAct[R, "RunAction[R]"]):
         return self.instance, self.action
 
 
-class RunAction[R](BaseRecursiveAction[R, RunAct[R], []]):
+class RunAction[R](BaseRecursiveAction[R, []]):
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> RunAct[R, Self, I]: ...
+        @overload
+        def __get__(self, inst: None | RunAct, owner: type | None = None) -> Self: ...
+
     func: Callable[[ParaO], R]
-    output: Callable[[RunAct[R]], BaseOutput[R]] | None = None
+    output: Callable[[RunAct], BaseOutput[R]] | None = None
+    _act = RunAct
 
 
 RunAction._peer_base = RunAction
@@ -88,9 +98,7 @@ class Runner[R](ABC):
     current = ContextValue["Runner | None"]("currentRunner", default=None)
 
     @abstractmethod
-    def __call__(
-        self, act: RunAct[R], sub: Iterable[RunAct], sub_kwargs: dict
-    ) -> R: ...
+    def __call__(self, act: RunAct, sub: Iterable[RunAct], sub_kwargs: dict) -> R: ...
 
 
 class ConcurrentRunner(Runner):

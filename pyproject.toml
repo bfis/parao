@@ -27,4 +27,4 @@ parao = ["src/parao", "*/parao/src/parao"]
 tests = ["tests", "*/parao/tests"]
 
 [tool.coverage.report]
-exclude_also = ["^ *def +.+: +\\.\\.\\.$"]
+exclude_also = ["^ *def +.+: +\\.\\.\\.$", "^ *if TYPE_CHECKING:"]

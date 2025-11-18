@@ -4,7 +4,16 @@ from dataclasses import dataclass
 from functools import lru_cache
 from inspect import Parameter, signature
 from operator import attrgetter
-from typing import Any, Callable, Concatenate, Iterable, Self, Type, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Concatenate,
+    Iterable,
+    Self,
+    Type,
+    overload,
+)
 
 from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, Value, eager
 from .misc import ContextValue
@@ -32,9 +41,9 @@ def _method_1st_arg_annotation[T](
 
 
 @dataclass(slots=True, frozen=True)
-class BaseAct[T, R, A: "BaseAction[T, R, BaseAct]"](ABC):
+class BaseAct[T, R, A: BaseAction, I: ParaO](ABC):
     action: A
-    instance: ParaO
+    instance: I
     value: T
     position: int = 0
 
@@ -54,19 +63,15 @@ class BaseAct[T, R, A: "BaseAction[T, R, BaseAct]"](ABC):
     def __call__(self) -> R: ...
 
 
-class BaseAction[T, R, A: BaseAct[T, R, BaseAction], **Ps](
-    AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]
-):
+class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
     significant = False
-    _act: Type[A]
-    TypedAlias.register(A, "_act")
-
+    _act: Type[BaseAct] = BaseAct
     TypedAlias.register(R, "return_type")
 
     def _type(self, cls, name):
         return self.type
 
-    def _get(self, val, name, instance) -> A:
+    def _get(self, val, name, instance) -> BaseAct:
         pos = val.position if isinstance(val, Value) else 0
         val = super()._get(val, name, instance)
         return self._act(self, instance, val, pos)
@@ -74,16 +79,18 @@ class BaseAction[T, R, A: BaseAct[T, R, BaseAction], **Ps](
     def _collect(self, expansion, instance):  # can't collect
         return False  # pragma: no cover
 
-    @overload
-    def __get__(self, inst: ParaO, owner: type | None = None) -> A: ...
-    @overload
-    def __get__(self, inst: None | BaseAct, owner: type | None = None) -> Self: ...
+    if TYPE_CHECKING:
 
-    del __get__  # don't overwrite the undelying __get__
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> BaseAct[T, R, Self, I]: ...
+        @overload
+        def __get__(self, inst: None | BaseAct, owner: type | None = None) -> Self: ...
 
 
 # simple variant
-class SimpleAct[R, A: SimpleAction[R]](BaseAct[bool, R, A]):
+class SimpleAct[R, A: SimpleAction, I: ParaO](BaseAct[bool, R, A, I]):
     __slots__ = ()
 
     @property
@@ -94,13 +101,25 @@ class SimpleAct[R, A: SimpleAction[R]](BaseAct[bool, R, A]):
         return self.action.func(self.instance)
 
 
-class SimpleAction[R](BaseAction[bool, R, SimpleAct[R, "SimpleAction[R]"], []]):
+class SimpleAction[R](BaseAction[bool, R, []]):
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> SimpleAct[R, Self, I]: ...
+        @overload
+        def __get__(
+            self, inst: None | SimpleAct, owner: type | None = None
+        ) -> Self: ...
+
     func: Callable[[ParaO], R]
     type = bool
+    _act = SimpleAct
 
 
 # value variant
-class ValueAct[T, R, A: ValueAction[T, R]](BaseAct[T, "ValueAction[T, R]", A]):
+class ValueAct[T, R, A: ValueAction, I: ParaO](BaseAct[T, R, A, I]):
     __slots__ = ()
 
     def __call__(self, override: T | Unset = UNSET) -> R:
@@ -111,7 +130,16 @@ class ValueAct[T, R, A: ValueAction[T, R]](BaseAct[T, "ValueAction[T, R]", A]):
             return self.action.func(self.instance, value)
 
 
-class ValueAction[T, R](BaseAction[T, R, ValueAct[T, R, "ValueAction[T, R]"], [T]]):
+class ValueAction[T, R](BaseAction[T, R, [T]]):
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> ValueAct[T, R, Self, I]: ...
+        @overload
+        def __get__(self, inst: None | ValueAct, owner: type | None = None) -> Self: ...
+
     def _type(self, cls, name):
         typ = self.type
         if typ is UNSET:
@@ -120,11 +148,12 @@ class ValueAction[T, R](BaseAction[T, R, ValueAct[T, R, "ValueAction[T, R]"], [T
 
     func: Callable[[ParaO, T], R]
     type: Type[T]
+    _act = ValueAct
 
 
 # recursive variant
-class RecursiveAct[R, A: BaseRecursiveAction[R, RecursiveAct]](
-    BaseAct[int | bool | None, R, A]
+class RecursiveAct[R, A: BaseRecursiveAction, I: ParaO](
+    BaseAct[int | bool | None, R, A, I]
 ):
     __slots__ = ()
 
@@ -136,14 +165,14 @@ class RecursiveAct[R, A: BaseRecursiveAction[R, RecursiveAct]](
                 if is_peer(other.__class__):
                     yield getattr(inner, name)
 
-    def _func(self, sub: Iterable[Self], depth: int = 0, **kwargs):
+    def _func(self, sub: Iterable[Self], depth: int = 0, **kwargs) -> R:
         if not self.action.func(self.instance, depth):
             for s in sub:
                 s(depth=depth + 1, **kwargs)
 
     def __call__(
         self, override: int | bool | None = None, *, _outer: int = None, **kwargs
-    ):
+    ) -> R:
         if override is None:
             val = self.value
             if val is UNSET:
@@ -162,9 +191,18 @@ class RecursiveAct[R, A: BaseRecursiveAction[R, RecursiveAct]](
         )
 
 
-class BaseRecursiveAction[R, A: RecursiveAct[R, BaseRecursiveAction], **Ps](
-    BaseAction[int | bool | None, R, A, Ps]
-):
+class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> RecursiveAct[R, Self, I]: ...
+        @overload
+        def __get__(
+            self, inst: None | RecursiveAct, owner: type | None = None
+        ) -> Self: ...
+
     _peer_base: type | None = None
 
     @classmethod
@@ -175,11 +213,10 @@ class BaseRecursiveAction[R, A: RecursiveAct[R, BaseRecursiveAction], **Ps](
             return other_cls is cls
 
     type = int | bool | None
+    _act = RecursiveAct
 
 
-class RecursiveAction(
-    BaseRecursiveAction[bool, RecursiveAct[None, "RecursiveAction"], [int]]
-):
+class RecursiveAction(BaseRecursiveAction[bool, [int]]):
     func: Callable[[ParaO, int], bool]
 
 
