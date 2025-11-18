@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import Executor, wait
-from typing import Callable, Iterable, Self, Type
+from typing import Callable, Iterable, Self
 
 from .action import BaseRecursiveAction, RecursiveAct
 from .cast import Opaque
@@ -32,7 +32,7 @@ class BaseOutput[T](ABC):
     def remove(self, missing_ok: bool = False) -> None: ...
 
 
-class RunAct[R](RecursiveAct["RunAction[R]"]):
+class RunAct[R](RecursiveAct[R, "RunAction[R]"]):
     __call__: Callable[[], R]
 
     def _func(
@@ -76,10 +76,8 @@ class RunAct[R](RecursiveAct["RunAction[R]"]):
         return self.instance, self.action
 
 
-class RunAction[R](BaseRecursiveAction[R, []]):
-    _act: Type[RunAct[R]] = RunAct
+class RunAction[R](BaseRecursiveAction[R, RunAct[R], []]):
     func: Callable[[ParaO], R]
-    __get__: Callable[..., RunAct[R]]
     output: Callable[[RunAct[R]], BaseOutput[R]] | None = None
 
 

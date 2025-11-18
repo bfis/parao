@@ -32,7 +32,7 @@ def _method_1st_arg_annotation[T](
 
 
 @dataclass(slots=True, frozen=True)
-class BaseAct[T, A: "BaseAction"](ABC):
+class BaseAct[T, R, A: "BaseAction[T, R, BaseAct]"](ABC):
     action: A
     instance: ParaO
     value: T
@@ -51,19 +51,22 @@ class BaseAct[T, A: "BaseAction"](ABC):
         return self.action._name(self.instance.__class__)
 
     @abstractmethod
-    def __call__(self): ...
+    def __call__(self) -> R: ...
 
 
-class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
+class BaseAction[T, R, A: BaseAct[T, R, BaseAction], **Ps](
+    AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]
+):
     significant = False
-    _act: Type[BaseAct] = BaseAct
+    _act: Type[A]
+    TypedAlias.register(A, "_act")
 
     TypedAlias.register(R, "return_type")
 
     def _type(self, cls, name):
         return self.type
 
-    def _get(self, val, name, instance) -> BaseAct:
+    def _get(self, val, name, instance) -> A:
         pos = val.position if isinstance(val, Value) else 0
         val = super()._get(val, name, instance)
         return self._act(self, instance, val, pos)
@@ -72,7 +75,7 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
         return False  # pragma: no cover
 
     @overload
-    def __get__(self, inst: ParaO, owner: type | None = None) -> BaseAct[T, Self]: ...
+    def __get__(self, inst: ParaO, owner: type | None = None) -> A: ...
     @overload
     def __get__(self, inst: None | BaseAct, owner: type | None = None) -> Self: ...
 
@@ -80,7 +83,7 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
 
 
 # simple variant
-class SimpleAct[R](BaseAct[bool, "SimpleAction[R]"]):
+class SimpleAct[R, A: SimpleAction[R]](BaseAct[bool, R, A]):
     __slots__ = ()
 
     @property
@@ -91,15 +94,13 @@ class SimpleAct[R](BaseAct[bool, "SimpleAction[R]"]):
         return self.action.func(self.instance)
 
 
-class SimpleAction[R](BaseAction[bool, R, []]):
-    _act = SimpleAct
+class SimpleAction[R](BaseAction[bool, R, SimpleAct[R, "SimpleAction[R]"], []]):
     func: Callable[[ParaO], R]
-    __get__: Callable[..., SimpleAct[R]]
     type = bool
 
 
 # value variant
-class ValueAct[T, R](BaseAct[T, "ValueAction[T, R]"]):
+class ValueAct[T, R, A: ValueAction[T, R]](BaseAct[T, "ValueAction[T, R]", A]):
     __slots__ = ()
 
     def __call__(self, override: T | Unset = UNSET) -> R:
@@ -110,21 +111,21 @@ class ValueAct[T, R](BaseAct[T, "ValueAction[T, R]"]):
             return self.action.func(self.instance, value)
 
 
-class ValueAction[T, R](BaseAction[T, R, [T]]):
+class ValueAction[T, R](BaseAction[T, R, ValueAct[T, R, "ValueAction[T, R]"], [T]]):
     def _type(self, cls, name):
         typ = self.type
         if typ is UNSET:
             typ = _method_1st_arg_annotation(self.func)
         return typ
 
-    _act = ValueAct
     func: Callable[[ParaO, T], R]
-    __get__: Callable[..., ValueAct[T, R]]
     type: Type[T]
 
 
 # recursive variant
-class RecursiveAct[A: "BaseRecursiveAction"](BaseAct[int | bool | None, A]):
+class RecursiveAct[R, A: BaseRecursiveAction[R, RecursiveAct]](
+    BaseAct[int | bool | None, R, A]
+):
     __slots__ = ()
 
     def _inner(self):
@@ -161,7 +162,9 @@ class RecursiveAct[A: "BaseRecursiveAction"](BaseAct[int | bool | None, A]):
         )
 
 
-class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
+class BaseRecursiveAction[R, A: RecursiveAct[R, BaseRecursiveAction], **Ps](
+    BaseAction[int | bool | None, R, A, Ps]
+):
     _peer_base: type | None = None
 
     @classmethod
@@ -174,10 +177,10 @@ class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
     type = int | bool | None
 
 
-class RecursiveAction(BaseRecursiveAction[bool, [int]]):
+class RecursiveAction(
+    BaseRecursiveAction[bool, RecursiveAct[None, "RecursiveAction"], [int]]
+):
     func: Callable[[ParaO, int], bool]
-    __get__: Callable[..., RecursiveAct]
-    _act = RecursiveAct
 
 
 class Plan(list[BaseAct]):
