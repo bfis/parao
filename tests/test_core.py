@@ -347,6 +347,24 @@ class TestParaO(TestCase):
             2,
         )
 
+    def test_remain(self):
+        class Drain(ParaO):
+            foo = Param[int]()
+            bar = Param[str]()
+
+        class Shared(ParaO):
+            drain = Param[Drain]()
+
+        class Low(Shared): ...
+
+        class High(Shared):
+            low = Param[Low]()
+
+        h = High({("drain", "foo"): 0, (ParaO, "drain", "foo"): 1})
+
+        self.assertEqual(h.drain.foo, 1)
+        self.assertEqual(h.low.drain.foo, 1)
+
     def test_gatekeeper(self):
         class Sub(ParaO):
             foo = Param[int]()

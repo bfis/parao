@@ -182,11 +182,14 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
                 if ga:
                     gat.append(ga)
             elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
+                if arg.types:
+                    com.append(arg)
+                    gat.append(arg)
+                    for vs in self.values():
+                        vs.append(arg)
                 if isinstance((v := arg.inner), Value):
                     Value.seen.add(v)
                     val[k] = val.get(k) | v
-                    if arg.types:  # do we want this?
-                        self.get(k, com).append(arg)
                 else:
                     self[k].append(v)
             else:
