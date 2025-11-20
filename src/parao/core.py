@@ -168,15 +168,19 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
                 oth = _Solution(arg, ref)
                 for k, v in oth._val.items():
                     val[k] = val.get(k) | v
+                if len(ga := oth._gat) < len(co := oth._com):
+                    div = True  # com & gat (will) divere
+                # 1st
+                for k, vs in self.items():
+                    vs.extend(ga if k.gatekeeper else co)
+                # 2nd
                 for k, v in oth.items():
                     self[k].extend(v)
-                # must be done after filling sub
-                if co := oth._com:
+                # 3rd
+                if co:
                     com.append(co)
-                if ga := oth._gat:
+                if ga:
                     gat.append(ga)
-                if len(ga) < len(co):
-                    div = True
             elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
                 if isinstance((v := arg.inner), Value):
                     Value.seen.add(v)

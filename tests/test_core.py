@@ -339,6 +339,14 @@ class TestParaO(TestCase):
             Wrap({"foo": 321}, {("one", "N_A"): 123, "foo": 123}).one.foo, 123
         )
 
+        self.assertEqual(
+            Wrap(
+                {("one", "bar"): "boo"},
+                Arguments.make({(Sub, "foo"): 2}),
+            ).one.foo,
+            2,
+        )
+
     def test_gatekeeper(self):
         class Sub(ParaO):
             foo = Param[int]()
