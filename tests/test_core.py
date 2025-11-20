@@ -87,6 +87,7 @@ def test_Arguments():
         )
     )
 
+    assert Arguments.from_dict({}) is Arguments.EMPTY
     assert Arguments.from_list([]) is Arguments.EMPTY
     assert Arguments.from_list([a := Arguments()]) is a
     assert Arguments.from_list(

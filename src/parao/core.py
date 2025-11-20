@@ -211,7 +211,7 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
 class Arguments(tuple["Arguments | Fragment", ...]):
     @classmethod
     def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
-        return cls._make(args + (kwargs,)) if kwargs else cls._make(args)
+        return cls._make(args, kwargs)
 
     @classmethod
     def _make(
@@ -230,11 +230,11 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                     sub.append(arg)
             elif isinstance(arg, dict):
                 if arg:
-                    sub.append(cls.from_dict(arg.items()))
+                    sub.extend(cls._from_dict(arg))
             else:
                 raise TypeError(f"unsupported argument type: {type(arg)}")
         if kwargs:
-            sub.append(cls.from_dict(kwargs))
+            sub.extend(cls._from_dict(kwargs))
 
         return cls.from_list(sub)
 
@@ -244,9 +244,19 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         k2v: Mapping[KeyTE, Any] | Iterable[tuple[KeyTE, Any]],
         prio: PrioT = 0,
     ):
+        if ret := cls(cls._from_dict(k2v, prio)):
+            return ret
+        return Arguments.EMPTY
+
+    @classmethod
+    def _from_dict(
+        cls,
+        k2v: Mapping[KeyTE, Any] | Iterable[tuple[KeyTE, Any]],
+        prio: PrioT = 0,
+    ):
         if callable(items := getattr(k2v, "items", None)):
             k2v = items()
-        return cls(
+        return (
             Fragment.make(k, v if isinstance(v, Value) else Value(v, prio))
             for k, v in k2v
         )
