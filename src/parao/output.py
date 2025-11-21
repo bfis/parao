@@ -12,6 +12,7 @@ from shutil import copy2, copytree, rmtree
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import GenericAlias, UnionType
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Iterable,
@@ -24,8 +25,19 @@ from typing import (
 )
 from warnings import warn
 
-from .core import UNSET, ParaO, Param, Unset, UntypedWarning, get_inner_parao
-from .run import BaseOutput, _Template, PseudoOutput, RunAct
+from .action import RecursiveAction
+from .core import (
+    UNSET,
+    AbstractParam,
+    Const,
+    ParaO,
+    Param,
+    Unset,
+    UntypedWarning,
+    get_inner_parao,
+)
+from .print import PPrint
+from .run import _Output, _RunAction, _Template, PseudoOutput, _RunAct
 from .shash import hex_hash, primitives
 
 type JSON[T] = T
@@ -138,7 +150,26 @@ class Coder[T]:
         return "t" if self.text else "b"
 
 
-class Output[R, A: RunAct](BaseOutput[R, A]):
+# further (_)RunAct(ion) subclass, to enable type hints
+class RunAct[R, A: RunAction, I: Task](_RunAct[R, A, I]):
+    output: "Output[R, Self]"
+
+
+class RunAction[R](_RunAction[R]):
+    output_template_attribute_name = "output"
+    _act = RunAct
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __get__[I: ParaO](
+            self, inst: I, owner: type | None = None
+        ) -> RunAct[R, Self, I]: ...
+        @overload
+        def __get__(self, inst: None | RunAct, owner: type | None = None) -> Self: ...
+
+
+class Output[R, A: RunAct](_Output[R, A]):
     """
     Basic output implementation for local file storage.
         Uses pickle by default, but also supports
@@ -538,3 +569,41 @@ class _Small(list[str]):
         ret = self.joiner(self)
         self.clear()
         return ret
+
+
+# need them here, otherwise we get cyclic imports with task.py
+pprint = PPrint()
+
+
+class Task[R](ParaO):
+    code_version: Const
+    run: RunAction[R]
+    output = Param[FancyTemplate](significant=False)
+
+    def __init_subclass__(cls):
+        v = cls.__dict__.get("code_version")
+        if v is not None and not isinstance(v, AbstractParam):
+            cls.code_version = Const(v)
+        r = cls.__dict__.get("run")
+        if r is not None and not isinstance(r, AbstractParam):
+            cls.run = RunAction(r)
+        return super().__init_subclass__()
+
+    @RecursiveAction
+    def remove(self, depth: int):
+        out = self.run.output
+        if out.exists:
+            out.remove()
+            after = "removed"
+        else:
+            after = "missing"
+        pprint.pprint(self, indent=2 * depth, after=after)
+
+    @RecursiveAction
+    def status(self, depth: int):
+        after = "done" if self.run.done else "missing"
+        pprint.pprint(self, indent=2 * depth, after=after)
+
+    @RecursiveAction
+    def print(self, depth: int):
+        pprint.pprint(self, indent=2 * depth)

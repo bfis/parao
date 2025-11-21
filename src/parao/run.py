@@ -12,7 +12,7 @@ class PseudoOutput(Opaque):
     """Special type that must only be handled directly lest it cause an error."""
 
 
-class BaseOutput[R, A: RunAct](ABC):
+class _Output[R, A: _RunAct](ABC):
     __slots__ = ("act",)
 
     def __init__(self, act: A):
@@ -34,14 +34,10 @@ class BaseOutput[R, A: RunAct](ABC):
 
 class _Template(ParaO):
     @abstractmethod
-    def __call__[R, A, I](self, act: "RunAct[R, A, I]") -> BaseOutput[R, A]: ...
+    def __call__[R, A, I](self, act: "_RunAct[R, A, I]") -> _Output[R, A]: ...
 
 
-class _Runnable(ParaO):
-    output: _Template
-
-
-class RunAct[R, A: RunAction, I: _Runnable](RecursiveAct[R, A, I]):
+class _RunAct[R, A: _RunAction, I: ParaO](RecursiveAct[R, A, I]):
     __call__: Callable[[], R]
 
     def _func(
@@ -67,12 +63,12 @@ class RunAct[R, A: RunAction, I: _Runnable](RecursiveAct[R, A, I]):
             return out
 
     __slots__ = ("output",)
-    output: BaseOutput[R, Self]
+    output: _Output[R, Self]
 
     def __post_init__(self):
         super().__post_init__()
-        output = self.instance.output(self)
-        object.__setattr__(self, "output", output)  # side-step "frozen"
+        output = getattr(self.instance, self.action.output_template_attribute_name)
+        object.__setattr__(self, "output", output(self))  # side-step "frozen"
 
     @property
     def done(self):
@@ -83,28 +79,29 @@ class RunAct[R, A: RunAction, I: _Runnable](RecursiveAct[R, A, I]):
         return self.instance, self.action
 
 
-class RunAction[R](BaseRecursiveAction[R, []]):
+class _RunAction[R](BaseRecursiveAction[R, []]):
     if TYPE_CHECKING:
 
         @overload
         def __get__[I: ParaO](
             self, inst: I, owner: type | None = None
-        ) -> RunAct[R, Self, I]: ...
+        ) -> _RunAct[R, Self, I]: ...
         @overload
-        def __get__(self, inst: None | RunAct, owner: type | None = None) -> Self: ...
+        def __get__(self, inst: None | _RunAct, owner: type | None = None) -> Self: ...
 
     func: Callable[[ParaO], R]
-    _act = RunAct
+    output_template_attribute_name: str
+    _act = _RunAct
 
 
-RunAction._peer_base = RunAction
+_RunAction._peer_base = _RunAction
 
 
 class Runner[R](ABC):
     current = ContextValue["Runner | None"]("currentRunner", default=None)
 
     @abstractmethod
-    def __call__(self, act: RunAct, sub: Iterable[RunAct], sub_kwargs: dict) -> R: ...
+    def __call__(self, act: _RunAct, sub: Iterable[_RunAct], sub_kwargs: dict) -> R: ...
 
 
 class ConcurrentRunner(Runner):
@@ -112,7 +109,7 @@ class ConcurrentRunner(Runner):
         self.executor = executor
         super().__init__()
 
-    def __call__(self, act: RunAct, sub: Iterable[RunAct], sub_kwargs: dict):
+    def __call__(self, act: _RunAct, sub: Iterable[_RunAct], sub_kwargs: dict):
         if act.done:
             return act.output.load()
         else:

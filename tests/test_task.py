@@ -28,10 +28,11 @@ from parao.output import (
     NotSupported,
     Output,
     Pickle,
+    RunAct,
     MoveAcrossFilesystem,
     UntypedOuput,
 )
-from parao.run import ConcurrentRunner, PseudoOutput, RunAct
+from parao.run import ConcurrentRunner, PseudoOutput
 from parao.task import RunAction, Task, pprint
 
 
