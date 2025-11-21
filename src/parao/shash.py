@@ -1,4 +1,3 @@
-from binascii import b2a_hex
 from collections import OrderedDict
 from functools import lru_cache
 from hashlib import sha256
@@ -144,5 +143,5 @@ def bin_hash(value: Any) -> bytes:
     return _SHash()(value)
 
 
-def hex_hash(value: Any) -> bytes:
-    return b2a_hex(bin_hash(value))
+def hex_hash(value: Any) -> str:
+    return bin_hash(value).hex()
