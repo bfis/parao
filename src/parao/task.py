@@ -1,10 +1,8 @@
-from typing import Callable, Type
-
 from .action import RecursiveAction
-from .core import AbstractParam, Const, ParaO
-from .output import Output
+from .core import AbstractParam, Const, ParaO, Param
+from .output import FancyTemplate
 from .print import PPrint
-from .run import RunAct, RunAction
+from .run import RunAction
 
 pprint = PPrint()
 
@@ -12,7 +10,7 @@ pprint = PPrint()
 class Task[R](ParaO):
     code_version: Const
     run: RunAction[R]
-    output: Callable[[RunAct], Output[R]] | Type[Output[R]] = Output
+    output = Param[FancyTemplate](significant=False)
 
     def __init_subclass__(cls):
         v = cls.__dict__.get("code_version")

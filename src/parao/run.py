@@ -12,10 +12,10 @@ class PseudoOutput(Opaque):
     """Special type that must only be handled directly lest it cause an error."""
 
 
-class BaseOutput[T](ABC):
+class BaseOutput[R, A: RunAct](ABC):
     __slots__ = ("act",)
 
-    def __init__(self, act: "RunAct[T]"):
+    def __init__(self, act: A):
         self.act = act
 
     @property
@@ -23,16 +23,25 @@ class BaseOutput[T](ABC):
     def exists(self) -> bool: ...
 
     @abstractmethod
-    def load(self) -> T: ...
+    def load(self) -> R: ...
 
     @abstractmethod
-    def dump(self, data: T | PseudoOutput) -> T: ...
+    def dump(self, data: R | PseudoOutput) -> R: ...
 
     @abstractmethod
     def remove(self, missing_ok: bool = False) -> None: ...
 
 
-class RunAct[R, A: RunAction, I: ParaO](RecursiveAct[R, A, I]):
+class _Template(ParaO):
+    @abstractmethod
+    def __call__[R, A, I](self, act: "RunAct[R, A, I]") -> BaseOutput[R, A]: ...
+
+
+class _Runnable(ParaO):
+    output: _Template
+
+
+class RunAct[R, A: RunAction, I: _Runnable](RecursiveAct[R, A, I]):
     __call__: Callable[[], R]
 
     def _func(
@@ -58,14 +67,12 @@ class RunAct[R, A: RunAction, I: ParaO](RecursiveAct[R, A, I]):
             return out
 
     __slots__ = ("output",)
-    output: BaseOutput[R]
+    output: BaseOutput[R, Self]
 
     def __post_init__(self):
         super().__post_init__()
-        output = self.action.output or self.instance.output
-        if not (isinstance(output, type) and issubclass(output, BaseOutput)):
-            raise TypeError(f"{output=} must by a BaseOutput subclass")
-        object.__setattr__(self, "output", output(self))  # side-step "frozen"
+        output = self.instance.output(self)
+        object.__setattr__(self, "output", output)  # side-step "frozen"
 
     @property
     def done(self):
@@ -87,7 +94,6 @@ class RunAction[R](BaseRecursiveAction[R, []]):
         def __get__(self, inst: None | RunAct, owner: type | None = None) -> Self: ...
 
     func: Callable[[ParaO], R]
-    output: Callable[[RunAct], BaseOutput[R]] | None = None
     _act = RunAct
 
 

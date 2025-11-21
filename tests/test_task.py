@@ -8,28 +8,31 @@ from pathlib import Path
 from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
 import sys
 from tempfile import TemporaryDirectory
+from typing import Any
 from warnings import catch_warnings
 import pytest
 from unittest.mock import Mock, call, patch
 
 from parao.action import ValueAction
 from parao.cli import CLI
-from parao.core import Const, OwnParameters, ParaO, Param
+from parao.core import Arguments, Const, OwnParameters, ParaO, Param
 from parao.output import (
     JSON,
     Coder,
     Dir,
     FSOutput,
+    FancyTemplate,
     File,
     Inconsistent,
     MissingOuput,
     NotSupported,
+    Output,
     Pickle,
     MoveAcrossFilesystem,
     UntypedOuput,
 )
 from parao.run import ConcurrentRunner, PseudoOutput, RunAct
-from parao.task import RunAction, Task, Output, pprint
+from parao.task import RunAction, Task, pprint
 
 
 sentinel = object()
@@ -37,9 +40,6 @@ sentinel = object()
 
 class BaseTask[T](Task[T]):
     space_waster = Param[str]("")
-
-    class output(Output):
-        base = None
 
 
 class Task1(BaseTask):
@@ -60,7 +60,7 @@ class Task2(BaseTask):
 
 @pytest.fixture
 def tmpdir4BaseTask(tmpdir):
-    with patch.object(BaseTask.output, "base", tmpdir):
+    with Arguments._ctxargs(Arguments.make({(FancyTemplate, "dir_base"): tmpdir})):
         yield tmpdir
 
 
@@ -69,8 +69,6 @@ def test(tmpdir4BaseTask):
     mock = Mock(return_value=return_sentinel)
 
     with patch.object(Task1.run, "func", mock):
-        assert issubclass(Task1.output, Output)
-
         assert Task1.run.type is RunAction.type
 
         assert isinstance(Task1.code_version, Const)
@@ -144,13 +142,12 @@ def test_output_transparent(typedTaskX):
 
 
 def test_output_unknown(tmpdir4BaseTask):
-    run = TaskX().run
     with (
-        patch.object(run.output._coders[-1], "typ", None),
+        patch.object(TaskX.output.type._coders[-1], "typ", None),
         patch.object(TaskX.run.func, "__annotations__", {"return": None}),
         pytest.raises(NotSupported),
     ):
-        run.output.coder
+        TaskX().run.output.coder
 
     with patch.object(TaskX.run, "func") as mock:
         TaskX.run.func.__annotations__ = {"return": UnsupportedPseudoOutput}
@@ -178,12 +175,12 @@ def test_output_extraCoder(tmpdir4BaseTask):
     )
 
     with (
-        patch.object(TaskX.output, "coders_extra", coders_extra),
+        # patch.object(TaskX.task, "coders_extra", coders_extra),
         patch.object(TaskX.run, "return_type", JSON2, create=True),
         patch.object(TaskX.run, "func") as mock,
     ):
         mock.return_value = [1, 2, 3]
-        t = TaskX()
+        t = TaskX({(FancyTemplate, "coders_extra"): coders_extra})
         assert t.run() is mock.return_value
         assert t.run.output.path.read_text() == "[\n  1,\n  2,\n  3\n]"
         assert t.run.output.load() == mock.return_value
@@ -238,9 +235,9 @@ def test_output_other_temp(tmpdir4BaseTask):
         mock.assert_called_once()
         mock.reset_mock()
 
-        mock.return_value = run.output.temp()
+        mock.return_value = tmp = run.output.temp()
         with (
-            make_readonly(tmpdir4BaseTask),
+            make_readonly(tmp.parent),
             pytest.raises(OSError),
         ):  # trigger failure in rename
             run()
@@ -457,3 +454,127 @@ def test_ConcurrentRunner(tmpdir4BaseTask):
         assert task.run() == res
         assert task.run() == res  # yes twice
         assert task.run.done
+
+
+class TaskC(Task):
+    in1 = Param[Any](None, neutral=None, pos=1)
+    in2 = Param[Any](None, neutral=None, pos=2)
+    in3 = Param[Any](None, neutral=None, pos=3)
+    in4 = Param[Any](None, neutral=None, pos=4)
+
+    def run(self) -> None: ...
+
+
+class TaskL(Task):
+    common = Param[TaskC]()
+    different = Param[str]("left")
+
+
+class TaskR(Task):
+    common = Param[TaskC]()
+    different = Param[str]("right")
+
+
+class TaskT(Task):
+    def run(self) -> None: ...
+
+    labeled = Param[int](0, pos=0)
+
+    small11 = Param[int](11, pos=1.1)
+    small12 = Param[int](12, pos=1.2)
+    small13 = Param[int](13, pos=1.3)
+
+    normal = Param[int](2, pos=2)
+
+    small21 = Param[int](21, pos=2.1)
+    small22 = Param[int](22, pos=2.2)
+    small23 = Param[int](23, pos=2.3)
+
+    left = Param[TaskL](pos=5)
+    right = Param[TaskR](pos=5)
+    left2 = Param[TaskL]()
+
+
+def test_templating(tmpdir):
+    altdir = tmpdir / "_alt"
+    r = Task1(
+        {
+            (FancyTemplate, "dir_base"): tmpdir,
+            (FancyTemplate, "dir_temp"): altdir,
+        }
+    ).run
+    assert r.output.path.is_relative_to(tmpdir)
+    assert r.output.temp().is_relative_to(altdir)
+
+    def probe(task: type[Task], extra: dict = {}, /, **kwargs) -> tuple[str]:
+        kwargs["dir_base"] = tmpdir
+        t = task(extra, {(FancyTemplate, k): v for k, v in kwargs.items()})
+        return t.run.output.path.relative_to(tmpdir).parts[:-1]
+
+    assert probe(TaskT) == (
+        "tests.test_task:TaskT",
+        "labeled=0",
+        "11_12_13",
+        "2",
+        "21_22_23",
+    )
+    assert probe(TaskT, tot_limit=0) == probe(TaskT)
+    assert probe(TaskT, tot_limit=40) == (
+        "tests.test_task:TaskT",
+        "labeled=0",
+    )
+    assert probe(TaskT, class_name=False, module_name=False) == (
+        "labeled=0",
+        "11_12_13",
+        "2",
+        "21_22_23",
+    )
+    assert probe(TaskT, dir_limit=1) == ("tests.test_task:TaskT",)
+    assert probe(TaskT, dir_limit=-1) == ()
+    assert probe(TaskT, name_limit=3, name_ellipsis="~") == (
+        "te~",
+        "la~",
+        "11~",
+        "2",
+        "21~",
+    )
+
+    assert probe(TaskT, {"in1": "foo"}, default_pos=1e3 + 0.1) == (
+        "tests.test_task:TaskT",
+        "labeled=0",
+        "11_12_13",
+        "2",
+        "21_22_23",
+        "foo",
+        "left",
+        "right",
+    )
+
+    with patch.object(os, "pathconf", lambda p, n: os.doesnotexist):
+        assert probe(
+            TaskC,
+            name_limit=-(4 + len(os.fsencode(FancyTemplate.name_ellipsis.default))),
+        ) == ("test…",)
+
+    assert probe(TaskC, {"in1": "………"}, name_limit=5) == ("te…", "…")
+    assert probe(
+        TaskC,
+        {
+            "in1": {
+                0: None,
+                1: True,
+                2: 0.2,
+                3: 3j,
+                4: "four",
+                5: b"bytes",
+                6: ...,
+            },
+            "in2": [1, "2", 3.0],
+            "in3": set("cab"),
+        },
+    ) == (
+        "tests.test_task:TaskC",
+        "0:None,1:True,2:0.2,3:3j,4:four,5:6279746573,6:Ellipsis",
+        "1,2,3.0",
+        "a,b,c",
+    )
