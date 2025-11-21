@@ -126,8 +126,9 @@ def test_params():
         cli.run(["Outer1", "--tests.test_cli:plain_object=123"])
     # expansion
     assert len(cli.run(["Outer1", "--foo=1,2"])) == 2
+    assert cli.run(["Outer1", "--bar=a,b"])[0].bar == "a,b"
     with pytest.raises(ValueError):
-        cli.run(["Outer1", "--bar=A,B", "--foo=1,x"])
+        cli.run(["Outer1", "--boo=0,1", "--foo=1,x"])
 
 
 def test_prio():

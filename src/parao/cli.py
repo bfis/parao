@@ -43,11 +43,15 @@ class CLIstr(str):
         return self
 
     def __cast_to__(self, typ, original_type):
-        if ori := get_origin(typ):
-            if isinstance(ori, type):  # pragma: no branch
-                if issubclass(ori, (tuple, list, set, frozenset)):
-                    if len(parts := self.split(",")) > 1:
-                        return cast(parts, original_type)
+        if (
+            (ori := get_origin(typ))
+            and isinstance(ori, type)
+            and issubclass(ori, (tuple, list, set, frozenset))
+            and len(parts := self.split(",")) > 1
+        ):
+            res = cast(list(map(self.__class__, parts)), original_type)
+            if not all(isinstance(r, str) for r in res):
+                return res
         if typ is bool:
             if self.empty:
                 return True
