@@ -1,16 +1,16 @@
-from collections import OrderedDict
 import sys
+from collections import OrderedDict
 from types import ModuleType
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from parao.core import ParaO, Param
+from parao.core import Param, ParaO
 from parao.shash import (
-    _SHash,
     UnsupportedError,
     UsesLocalsError,
     UsesMainWarning,
     UsesPickleWarning,
+    _SHash,
     bin_hash,
     hex_hash,
 )

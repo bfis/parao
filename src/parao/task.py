@@ -1,4 +1,4 @@
-from .output import Task, RunAction, pprint
+from .output import RunAction, Task, pprint
 
 __all__ = ("Task", "RunAction", "pprint")
 

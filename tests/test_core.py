@@ -1,30 +1,31 @@
-from operator import attrgetter
 import pickle
+from operator import attrgetter
 from unittest import TestCase
 from unittest.mock import Mock
 from warnings import catch_warnings
+
+import pytest
+
 from parao.core import (
     UNSET,
-    OwnParameters,
-    _Param,
     Arguments,
     Const,
+    DuplicateParameter,
     Expansion,
+    ExpansionGeneratedKeyMissingParameter,
     Fragment,
-    ParaO,
-    Param,
     MissingParameterValue,
+    OwnParameters,
+    Param,
+    ParaO,
     Prop,
     TypedAlias,
     Unset,
     UntypedParameter,
     Value,
+    _Param,
     eager,
-    DuplicateParameter,
-    ExpansionGeneratedKeyMissingParameter,
 )
-import pytest
-
 from parao.misc import TypedAliasClash, TypedAliasMismatch, TypedAliasRedefined
 
 uniq_object = object()

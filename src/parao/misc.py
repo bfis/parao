@@ -1,11 +1,11 @@
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
 from functools import partial
+from os.path import dirname
 from types import GenericAlias
 from typing import Any, Callable, Iterable, Self, TypeVar, overload
 from warnings import warn
 from weakref import WeakKeyDictionary
-from os.path import dirname
 
 _sentinel = object()
 

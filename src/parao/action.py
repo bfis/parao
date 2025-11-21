@@ -15,7 +15,7 @@ from typing import (
     overload,
 )
 
-from .core import UNSET, _DecoratorParam, ParaO, TypedAlias, Unset, Value, eager
+from .core import UNSET, ParaO, TypedAlias, Unset, Value, _DecoratorParam, eager
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]

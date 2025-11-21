@@ -1,6 +1,6 @@
 import pytest
 
-from parao.core import ParaO, Param, Prop
+from parao.core import Param, ParaO, Prop
 from parao.steno import (
     InconsistentValues,
     MultipleSameValues,

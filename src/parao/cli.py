@@ -1,4 +1,3 @@
-from itertools import count
 import json
 import re
 import sys
@@ -7,19 +6,20 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
+from itertools import count
 from operator import attrgetter
 from typing import Iterable
 
 from .action import Plan
 from .cast import cast
 from .core import (
-    _Param,
     Arguments,
     Expansion,
     Fragment,
     ParaO,
     ParaOMeta,
     Value,
+    _Param,
     eager,
 )
 from .misc import PeekableIter, ewarn, is_subseq

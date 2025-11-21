@@ -1,5 +1,6 @@
 from unittest import TestCase
-from parao.misc import ContextValue, PeekableIter, safe_len, safe_repr, is_subseq
+
+from parao.misc import ContextValue, PeekableIter, is_subseq, safe_len, safe_repr
 
 
 class TestContextValue(TestCase):

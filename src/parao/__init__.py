@@ -3,8 +3,8 @@ from .cast import Opaque  # noqa: F401
 from .cli import CLI
 from .core import Const, Param, ParaO, Prop
 from .output import JSON, Dir, File, Output, Pickle
-from .task import Task, RunAction
-from .steno import ItemSteno, AttrSteno, Steno
+from .steno import AttrSteno, ItemSteno, Steno
+from .task import RunAction, Task
 
 __all__ = [
     "ParaO",

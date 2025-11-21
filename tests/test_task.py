@@ -1,40 +1,40 @@
+import json
+import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import partial
 from io import IOBase
-import json
-import os
 from pathlib import Path
 from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
-import sys
 from tempfile import TemporaryDirectory
 from typing import Any
-from warnings import catch_warnings
-import pytest
 from unittest.mock import Mock, call, patch
+from warnings import catch_warnings
+
+import pytest
 
 from parao.action import ValueAction
 from parao.cli import CLI
-from parao.core import Arguments, Const, OwnParameters, ParaO, Param
+from parao.core import Arguments, Const, OwnParameters, Param, ParaO
 from parao.output import (
     JSON,
     Coder,
     Dir,
-    FSOutput,
     FancyTemplate,
     File,
+    FSOutput,
     Inconsistent,
     MissingOuput,
+    MoveAcrossFilesystem,
     NotSupported,
     Output,
     Pickle,
     RunAct,
-    MoveAcrossFilesystem,
     UntypedOuput,
 )
 from parao.run import ConcurrentRunner, PseudoOutput
 from parao.task import RunAction, Task, pprint
-
 
 sentinel = object()
 

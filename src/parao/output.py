@@ -1,13 +1,13 @@
-from functools import partial
-from itertools import chain, islice, takewhile
 import json
 import os
 import pickle
+import re
 from dataclasses import KW_ONLY, dataclass
 from errno import EXDEV
+from functools import partial
 from io import FileIO
+from itertools import chain, islice, takewhile
 from pathlib import Path
-import re
 from shutil import copy2, copytree, rmtree
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import GenericAlias, UnionType
@@ -28,17 +28,17 @@ from warnings import warn
 from .action import RecursiveAction
 from .core import (
     UNSET,
-    _Param,
     Const,
-    ParaO,
     Param,
+    ParaO,
     Unset,
     UntypedWarning,
+    _Param,
     get_inner_parao,
 )
 from .misc import StrOpBuffer
 from .print import PPrint
-from .run import _Output, _RunAction, _Template, PseudoOutput, _RunAct
+from .run import PseudoOutput, _Output, _RunAct, _RunAction, _Template
 from .shash import hex_hash, primitives
 
 type JSON[T] = T

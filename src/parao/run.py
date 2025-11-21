@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import Executor, wait
 from typing import TYPE_CHECKING, Callable, Iterable, Self, overload
 
-from .action import _RecursiveAction, RecursiveAct
+from .action import RecursiveAct, _RecursiveAction
 from .cast import Opaque
 from .core import ParaO
 from .misc import ContextValue

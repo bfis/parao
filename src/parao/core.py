@@ -22,7 +22,7 @@ from warnings import catch_warnings
 from weakref import WeakSet
 
 from .cast import Opaque, cast
-from .misc import ContextValue, TypedAliasRedefined, safe_len, ewarn, TypedAlias
+from .misc import ContextValue, TypedAlias, TypedAliasRedefined, ewarn, safe_len
 from .shash import _SHash, bin_hash
 
 __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]

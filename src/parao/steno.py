@@ -1,5 +1,6 @@
 from collections import defaultdict
-from .core import _Param, Fragment, KeyTE, ParaO, get_inner_parao
+
+from .core import Fragment, KeyTE, ParaO, _Param, get_inner_parao
 from .misc import ewarn
 
 

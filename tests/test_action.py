@@ -2,13 +2,8 @@ from typing import Any
 from unittest import TestCase
 from unittest.mock import Mock, call
 
-from parao.action import (
-    SimpleAction,
-    Plan,
-    RecursiveAction,
-    ValueAction,
-)
-from parao.core import ParaO, Param, Prop, UntypedParameter, Value
+from parao.action import Plan, RecursiveAction, SimpleAction, ValueAction
+from parao.core import Param, ParaO, Prop, UntypedParameter, Value
 
 
 class TestAction(TestCase):

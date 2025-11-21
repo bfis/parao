@@ -1,6 +1,9 @@
-from json import JSONDecodeError
 import sys
+from json import JSONDecodeError
 from unittest.mock import patch
+
+import pytest
+
 from parao.cli import (
     CLI,
     AmbiguousCandidate,
@@ -10,15 +13,13 @@ from parao.cli import (
     NotAParaO,
     ParaONotFound,
     Sep,
-    UnusedArguments,
-    UnsupportedKeyType,
-    UnusedOptions,
     UnmatchedArguments,
+    UnsupportedKeyType,
+    UnusedArguments,
+    UnusedOptions,
     ValueMissing,
 )
-from parao.core import MissingParameterValue, ParaO, Param
-
-import pytest
+from parao.core import MissingParameterValue, Param, ParaO
 
 
 class Outer1(ParaO):

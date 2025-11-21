@@ -28,3 +28,6 @@ tests = ["tests", "*/parao/tests"]
 
 [tool.coverage.report]
 exclude_also = ["^ *def +.+: +\\.\\.\\.$", "^ *if TYPE_CHECKING:"]
+
+[tool.ruff.lint]
+extend-select = ["I"]

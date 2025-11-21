@@ -1,5 +1,6 @@
 from typing import Annotated, Any
 from unittest import TestCase
+
 from parao.cast import cast
 
 
