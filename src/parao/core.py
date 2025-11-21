@@ -671,13 +671,14 @@ class AbstractParam[T]:
         return typ
 
     def _cast(self, raw, typ):
-        try:
-            exp = cast(raw, Expansion[typ])
-        except TypeError:
-            pass
-        else:
-            if isinstance(exp, Expansion):
-                raise exp
+        if typ is not UNSET and typ is not Any:
+            try:
+                exp = cast(raw, Expansion[typ])
+            except TypeError:
+                pass
+            else:
+                if isinstance(exp, Expansion):
+                    raise exp
         return cast(raw, typ)
 
     def _get(self, val: Value | None, name: str, instance: "ParaO") -> T:
