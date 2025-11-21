@@ -87,7 +87,7 @@ def cast(val: Any, typ: type) -> Any:
     elif isinstance(val, str) and (
         typ is bool or isinstance(type, typ) and issubclass(typ, bool)
     ):
-        raise TypeError("can't cast {val!r} to {typ}")
+        raise TypeError(f"can't cast {val!r} to {typ}")
     else:
         ret = typ(val)
         if isinstance(val, _numeric) and isinstance(ret, _numeric) and ret != val:

@@ -27,6 +27,15 @@ from .misc import PeekableIter, ewarn, is_subseq
 
 class CLIstr(str):
     __slots__ = ("empty",)
+    _bool_map = {
+        k: v
+        for v, ks in {
+            True: ("true", "yes", "+", "1"),
+            False: ("false", "no", "-", "0"),
+        }.items()
+        for ke in ks
+        for k in (ke, ke[0])
+    }
 
     def __new__(cls, value: str):
         self = super().__new__(cls, "" if value is None else value)
@@ -39,8 +48,12 @@ class CLIstr(str):
                 if issubclass(ori, (tuple, list, set, frozenset)):
                     if len(parts := self.split(",")) > 1:
                         return cast(parts, original_type)
-        if self.empty and typ is bool:
-            return True
+        if typ is bool:
+            if self.empty:
+                return True
+            if (v := self._bool_map.get(self.lower(), None)) is not None:
+                return v
+            raise ValueError(f"{self} not interpretable as bool")
 
         return NotImplemented
 

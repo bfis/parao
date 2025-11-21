@@ -28,7 +28,7 @@ class Outer1(ParaO):
 
     foo = Param[int](1)
     bar = Param[str]("outer")
-    boo = Param[bool](False)
+    boo = Param[bool](None)
 
 
 class Outer2(ParaO):
@@ -92,7 +92,11 @@ def test_params():
     assert cli.run(["Outer1", "--Outer1.foo=123"])[0].foo == 123
     # various empties
     assert cli.run(["Outer1", "--bar="])[0].bar == ""
+    assert cli.run(["Outer1"])[0].boo is None
     assert cli.run(["Outer1", "--boo"])[0].boo is True
+    assert cli.run(["Outer1", "--boo=n"])[0].boo is False
+    with pytest.raises(ValueError):
+        assert cli.run(["Outer1", "--boo=what?"])[0].boo
     assert cli.run(["Outer1", "--boo", "--bar=b"])[0].boo is True
     # class
     with pytest.raises(ValueMissing):
