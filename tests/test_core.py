@@ -455,7 +455,6 @@ class TestParaO(TestCase):
         func.assert_called_once_with(exp, inst)
         self.assertIsInstance(exp.source, Foo)
         self.assertIsInstance(exp, Expansion)
-        # self.assertEqual(exp._unwind, [])
         self.assertEqual(exp.make_key(), ("bar",))
         self.assertEqual(exp.make_key(False), (Foo, "bar"))
         self.assertEqual(exp.make_key(False, use_cls=False), ("bar",))

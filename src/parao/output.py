@@ -213,7 +213,6 @@ class Output[R, A: RunAct](_Output[R, A]):
         if self.coder.is_dir:
             if not missing_ok or self.exists:
                 rmtree(self.path)
-                # self.path.rmdir(missing_ok)
         else:
             self.path.unlink(missing_ok)
 
@@ -405,7 +404,6 @@ class FancyTemplate(PlainTemplate):
         limit = self.name_limit
         if limit < 0:
             try:
-                # limit = os.statvfs(self.dir_base).f_namemax
                 limit = os.pathconf(self.dir_base, "PC_NAME_MAX")
             except AttributeError:
                 limit = -limit

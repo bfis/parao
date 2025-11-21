@@ -176,7 +176,6 @@ def test_output_extraCoder(tmpdir4BaseTask):
     )
 
     with (
-        # patch.object(TaskX.task, "coders_extra", coders_extra),
         patch.object(TaskX.run, "return_type", JSON2, create=True),
         patch.object(TaskX.run, "func") as mock,
     ):

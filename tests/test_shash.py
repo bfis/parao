@@ -92,7 +92,6 @@ class TestShash(TestCase):
             object.__init__,
             object().__str__,
             str.join,
-            # dict.__dict__["fromkeys"],
         ]:
             with self.subTest(probe=probe), self.assertWarns(UsesPickleWarning):
                 bin_hash(probe)

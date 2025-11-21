@@ -31,7 +31,6 @@ Unset.__new__ = lambda _: UNSET
 _param_counter = count()
 
 
-# type KeyE = type | object | str
 type KeyE = str | type | _Param
 type KeyT = tuple[KeyE, ...]
 type KeyTE = KeyT | KeyE
@@ -780,7 +779,6 @@ class Expansion[T](BaseException):
         if not self._frames:
             self.param = param
             self.source = inst
-            # do we need these? or are they only for _unwind construction
             self.value = value
         # is it collected here?
         if param._collect(self, inst):
