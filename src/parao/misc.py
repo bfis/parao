@@ -1,10 +1,17 @@
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
-from typing import Any, Callable, Iterable, Self, overload
+from functools import partial
+from types import GenericAlias
+from typing import Any, Callable, Iterable, Self, TypeVar, overload
+from warnings import warn
+from weakref import WeakKeyDictionary
+from os.path import dirname
 
 _sentinel = object()
 
 __all__ = ["ContextValue", "context_manager_set", "safe_repr", "safe_len"]
+
+ewarn = partial(warn, skip_file_prefixes=(dirname(__file__),))
 
 
 @contextmanager
@@ -112,3 +119,58 @@ class _StrOpBuffer(list[str]):
         ret = self.func(self)
         self.clear()
         return ret
+
+
+class TypedAliasMismatch(RuntimeWarning): ...
+
+
+class TypedAliasClash(TypeError): ...
+
+
+class TypedAliasRedefined(RuntimeWarning): ...
+
+
+class TypedAlias(GenericAlias):
+    _typevar2name = WeakKeyDictionary[TypeVar, str]()  # shadowed on instances!
+
+    def __init__(self, *arg, **kwargs):
+        super().__init__()
+        cls = self.__class__
+        tv2n = cls._typevar2name
+        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
+            if name := tv2n.get(tp):
+                if isinstance(arg, TypeVar):
+                    if arg.__name__ != tp.__name__:
+                        warn(f"{arg} -> {tp}", TypedAliasMismatch, stacklevel=4)
+                    cls.register(arg, name)
+
+    def __call__(self, *args, **kwds):
+        tv2n = self.__class__._typevar2name
+        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
+            if name := tv2n.get(tp):
+                assert not isinstance(arg, TypeVar)  # already registered during init
+                kwds.setdefault(name, arg)
+        return super().__call__(*args, **kwds)
+
+    @classmethod
+    def convert(cls, ga: GenericAlias):
+        return cls(ga.__origin__, ga.__args__)
+
+    @classmethod
+    def register(cls, tv: TypeVar, name: str):
+        if got := cls._typevar2name.get(tv):
+            if got != name:
+                raise TypedAliasClash(f"{tv} wants {name!r} already got {got!r}")
+            else:
+                ewarn(str(tv), TypedAliasRedefined)
+        else:
+            cls._typevar2name[tv] = name
+
+    @classmethod
+    def init_subclass(cls, subcls: type):
+        for ob in reversed(subcls.__orig_bases__):
+            if isinstance(ob, cls):
+                for arg, tp in zip(ob.__args__, ob.__origin__.__type_params__):
+                    if name := cls._typevar2name.get(tp):
+                        if not isinstance(arg, TypeVar) and not hasattr(subcls, name):
+                            setattr(subcls, name, arg)

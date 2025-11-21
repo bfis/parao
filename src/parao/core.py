@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from functools import lru_cache, partial
 from itertools import count
 from math import inf
-from os.path import dirname
 from pickle import PicklingError
 from types import GenericAlias
 from typing import (
@@ -16,20 +15,17 @@ from typing import (
     Mapping,
     Protocol,
     Self,
-    TypeVar,
     get_type_hints,
     overload,
 )
-from warnings import catch_warnings, warn
-from weakref import WeakKeyDictionary, WeakSet
+from warnings import catch_warnings
+from weakref import WeakSet
 
 from .cast import Opaque, cast
-from .misc import ContextValue, safe_len
+from .misc import ContextValue, TypedAliasRedefined, safe_len, ewarn, TypedAlias
 from .shash import _SHash, bin_hash
 
 __all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
-
-ewarn = partial(warn, skip_file_prefixes=(dirname(__file__),))
 
 
 class Unset(Opaque):
@@ -544,58 +540,6 @@ class ParaO(metaclass=ParaOMeta):
                 yield name, getattr(self, name), neutral
 
 
-class TypedAlias(GenericAlias):
-    _typevar2name = WeakKeyDictionary[TypeVar, str]()  # shadowed on instances!
-
-    class TypedAliasMismatch(RuntimeWarning): ...
-
-    class TypedAliasClash(TypeError): ...
-
-    class TypedAliasRedefined(RuntimeWarning): ...
-
-    def __init__(self, *arg, **kwargs):
-        super().__init__()
-        cls = self.__class__
-        tv2n = cls._typevar2name
-        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
-            if name := tv2n.get(tp):
-                if isinstance(arg, TypeVar):
-                    if arg.__name__ != tp.__name__:
-                        warn(f"{arg} -> {tp}", cls.TypedAliasMismatch, stacklevel=4)
-                    cls.register(arg, name)
-
-    def __call__(self, *args, **kwds):
-        tv2n = self.__class__._typevar2name
-        for arg, tp in zip(self.__args__, self.__origin__.__type_params__):
-            if name := tv2n.get(tp):
-                assert not isinstance(arg, TypeVar)  # already registered during init
-                kwds.setdefault(name, arg)
-        return super().__call__(*args, **kwds)
-
-    @classmethod
-    def convert(cls, ga: GenericAlias):
-        return cls(ga.__origin__, ga.__args__)
-
-    @classmethod
-    def register(cls, tv: TypeVar, name: str):
-        if got := cls._typevar2name.get(tv):
-            if got != name:
-                raise cls.TypedAliasClash(f"{tv} wants {name!r} already got {got!r}")
-            else:
-                ewarn(str(tv), cls.TypedAliasRedefined)
-        else:
-            cls._typevar2name[tv] = name
-
-    @classmethod
-    def init_subclass(cls, subcls: "type[AbstractParam]"):
-        for ob in reversed(subcls.__orig_bases__):
-            if isinstance(ob, cls):
-                for arg, tp in zip(ob.__args__, ob.__origin__.__type_params__):
-                    if name := cls._typevar2name.get(tp):
-                        if not isinstance(arg, TypeVar) and not hasattr(subcls, name):
-                            setattr(subcls, name, arg)
-
-
 class UntypedWarning(RuntimeWarning):
     @classmethod
     def warn(cls, param: "AbstractParam", instance: "ParaO", name: str | None = None):
@@ -625,7 +569,7 @@ def _solve_name(param: "Param", icls: "ParaOMeta") -> str | None:
 
 @lru_cache
 def _get_type_hints(cls: "ParaOMeta"):
-    with catch_warnings(category=TypedAlias.TypedAliasRedefined, action="ignore"):
+    with catch_warnings(category=TypedAliasRedefined, action="ignore"):
         return get_type_hints(cls)
 
 

@@ -21,9 +21,8 @@ from .core import (
     ParaOMeta,
     Value,
     eager,
-    ewarn,
 )
-from .misc import PeekableIter, is_subseq
+from .misc import PeekableIter, ewarn, is_subseq
 
 
 class CLIstr(str):

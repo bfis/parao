@@ -25,6 +25,8 @@ from parao.core import (
 )
 import pytest
 
+from parao.misc import TypedAliasClash, TypedAliasMismatch, TypedAliasRedefined
+
 uniq_object = object()
 
 
@@ -149,7 +151,7 @@ class TestParam(TestCase):
         self.assertIs(Param()._name(int), None)
 
     def test_typed_alias(self):
-        with self.assertWarns(TypedAlias.TypedAliasMismatch):
+        with self.assertWarns(TypedAliasMismatch):
 
             class WonkyParam[A, B, C](AbstractParam[B]): ...
 
@@ -163,17 +165,17 @@ class TestParam(TestCase):
 
         self.assertIs(StrangeParam().type, Sentinel)
 
-        with self.assertWarns(TypedAlias.TypedAliasRedefined):
+        with self.assertWarns(TypedAliasRedefined):
 
             class RedundantParam[T](AbstractParam[T]):
                 TypedAlias.register(T, TypedAlias._typevar2name[T])
 
-        with self.assertRaises(TypedAlias.TypedAliasClash):
+        with self.assertRaises(TypedAliasClash):
 
             class ClashingParam[T](AbstractParam[T]):
                 TypedAlias.register(T, "not" + TypedAlias._typevar2name[T])
 
-        with self.assertWarns(TypedAlias.TypedAliasMismatch):
+        with self.assertWarns(TypedAliasMismatch):
 
             class MismatchParam[R](AbstractParam[R]): ...
 

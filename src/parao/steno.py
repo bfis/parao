@@ -1,5 +1,6 @@
 from collections import defaultdict
-from .core import AbstractParam, Fragment, KeyTE, ParaO, get_inner_parao, ewarn
+from .core import AbstractParam, Fragment, KeyTE, ParaO, get_inner_parao
+from .misc import ewarn
 
 
 def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
