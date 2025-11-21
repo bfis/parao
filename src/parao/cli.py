@@ -234,11 +234,10 @@ class CLI:
                 if num := len(cand):
                     if num > 1:
                         warning = MultipleCandidates
+                    elif ret := next(iter(cand)):
+                        return ret
                     else:
-                        if ret := next(iter(cand)):
-                            return ret
-                        else:
-                            warning = AmbiguousCandidate
+                        warning = AmbiguousCandidate
                     ewarn(f"{module}:{attr}" if module else attr, warning)
 
         return func

@@ -40,8 +40,7 @@ def cast(val: Any, typ: type) -> Any:
                     return cast(val, arg)
                 except (TypeError, ValueError):
                     pass
-            else:
-                raise TypeError(f"could not cast {val!r} to {typ}")
+            raise TypeError(f"could not cast {val!r} to {typ}")
 
         # container types
         if isinstance(ori, type):  # pragma: no branch

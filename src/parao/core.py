@@ -99,8 +99,7 @@ class Fragment:
                 return cls(k, tuple(types) if types else None, cls._make(it, value))
             else:
                 raise TypeError(f"invaid key components: {k!r}")
-        else:
-            return cls(None, tuple(types), value) if types else value
+        return cls(None, tuple(types), value) if types else value
 
     def is_type_ok(self, ref: type):
         if typs := self.types:
@@ -342,11 +341,10 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                         done.add(arg)
                         stack.append((it, path))
                         break
-                else:
-                    if (used is None or used == (arg in Value.used)) and (
-                        seen is None or seen == (arg in Value.seen)
-                    ):
-                        yield path + ((arg,) if arg is arg0 else (arg0, arg))
+                elif (used is None or used == (arg in Value.used)) and (
+                    seen is None or seen == (arg in Value.seen)
+                ):
+                    yield path + ((arg,) if arg is arg0 else (arg0, arg))
             else:
                 stack.pop()
 
@@ -787,7 +785,7 @@ class Expansion[T](BaseException):
         self._frames.append(
             (inst.__class__, param, inst.__args__.get_root_of(self.value))
         )
-        raise  # self # but don't to avoid mangling the traceback
+        raise  # self # but don't to avoid mangling the traceback # noqa: PLE0704
 
     def make_key(
         self,

@@ -134,7 +134,7 @@ class TypedAliasRedefined(RuntimeWarning): ...
 class TypedAlias(GenericAlias):
     _typevar2name = WeakKeyDictionary[TypeVar, str]()  # shadowed on instances!
 
-    def __init__(self, *arg, **kwargs):
+    def __init__(self, *_):
         super().__init__()
         cls = self.__class__
         tv2n = cls._typevar2name

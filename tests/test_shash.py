@@ -119,7 +119,7 @@ class TestShash(TestCase):
         with patch.dict(sys.modules, numpy=numpy):
             del sys.modules["parao.shash"]
 
-            from parao.shash import hex_hash
+            from parao.shash import hex_hash  # noqa: PLC0415
 
             nda = Mock(spec=ndarray)
             nda.tolist = Mock(return_value=[[[1], [2], [3]]])
