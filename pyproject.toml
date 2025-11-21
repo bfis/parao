@@ -30,4 +30,8 @@ tests = ["tests", "*/parao/tests"]
 exclude_also = ["^ *def +.+: +\\.\\.\\.$", "^ *if TYPE_CHECKING:"]
 
 [tool.ruff.lint]
-extend-select = ["I", "UP"]
+extend-select = ["I", "UP", "N"]
+extend-ignore = ["N818"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["N80"]

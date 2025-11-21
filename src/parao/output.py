@@ -54,7 +54,7 @@ class FSOutput(Path, PseudoOutput):
         return super().with_segments(*args)._copy_temp(self)
 
     @classmethod
-    def tempDir(cls, **kwargs):
+    def temp_dir(cls, **kwargs):
         tmp = TemporaryDirectory(**kwargs)
         ret = cls(tmp.name)
         ret._temp = tmp
@@ -68,7 +68,7 @@ class FSOutput(Path, PseudoOutput):
 class Dir(FSOutput):
     @classmethod
     def temp(cls, **kwargs):
-        return cls.tempDir(**kwargs)
+        return cls.temp_dir(**kwargs)
 
 
 class File(FSOutput):
@@ -196,7 +196,7 @@ class Output[R, A: RunAct](_Output[R, A]):
         if (is_dir := self.coder.is_dir) or mode == "":
             if mode or kwargs:
                 raise ValueError("superfluous arguments!")
-            ret = self.fsoutput_type.tempDir(**dps)
+            ret = self.fsoutput_type.temp_dir(**dps)
             return ret if is_dir else ret.joinpath(path.with_stem("temp").name)
 
         if mode is None:

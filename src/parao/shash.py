@@ -15,7 +15,7 @@ try:
     from numpy import dtype, ndarray
 except ModuleNotFoundError:
 
-    class ndarray: ...  # phony placeholder
+    class ndarray: ...  # phony placeholder # noqa: N801
 
 else:
     primitives += (dtype,)

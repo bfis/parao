@@ -66,10 +66,10 @@ def cast(val: Any, typ: type) -> Any:
                 return ori(map(cast, val, repeat(typ1)))
 
             if issubclass(ori, dict):
-                typK, typV = args
+                k_typ, v_typ = args
                 return ori(
                     {
-                        cast(k, typK): cast(v, typV)
+                        cast(k, k_typ): cast(v, v_typ)
                         for k, v in (val.items() if isinstance(val, dict) else val)
                     }
                 )
