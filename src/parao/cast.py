@@ -21,7 +21,7 @@ def cast(val: Any, typ: type) -> Any:
     ori = get_origin(typ)
 
     if cast_to := getattr(val, "__cast_to__", None):
-        if (ret := cast_to(typ, typ0)) is not NotImplemented:
+        if (ret := cast_to(ori or typ, typ0)) is not NotImplemented:
             return ret
 
     if cast_from := getattr(ori or typ, "__cast_from__", None):

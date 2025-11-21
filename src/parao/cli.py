@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
 from operator import attrgetter
-from typing import Iterable, get_origin
+from typing import Iterable
 
 from .action import Plan
 from .cast import cast
@@ -44,9 +44,8 @@ class CLIstr(str):
 
     def __cast_to__(self, typ, original_type):
         if (
-            (ori := get_origin(typ))
-            and isinstance(ori, type)
-            and issubclass(ori, (tuple, list, set, frozenset))
+            isinstance(typ, type)
+            and issubclass(typ, (tuple, list, set, frozenset))
             and len(parts := self.split(",")) > 1
         ):
             res = cast(list(map(self.__class__, parts)), original_type)
@@ -57,7 +56,7 @@ class CLIstr(str):
                 return True
             if (v := self._bool_map.get(self.lower(), None)) is not None:
                 return v
-            raise ValueError(f"{self} not interpretable as bool")
+            raise ValueError(f"{self!r} not interpretable as bool")
 
         return NotImplemented
 
