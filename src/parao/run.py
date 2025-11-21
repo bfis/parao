@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 from concurrent.futures import Executor, wait
-from typing import TYPE_CHECKING, Callable, Iterable, Self, overload
+from typing import TYPE_CHECKING, Self, overload
 
 from .action import RecursiveAct, _RecursiveAction
 from .cast import Opaque

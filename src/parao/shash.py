@@ -1,9 +1,10 @@
 from collections import OrderedDict
+from collections.abc import Callable, Hashable, Iterable
 from functools import lru_cache
 from hashlib import sha256
 from operator import attrgetter
 from types import FunctionType, ModuleType
-from typing import Any, Callable, Hashable, Iterable, Protocol
+from typing import Any, Protocol
 from warnings import warn
 
 primitives = (str, int, float, type(None), bytes, complex, type(Ellipsis))

@@ -1,19 +1,11 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from inspect import Parameter, signature
 from operator import attrgetter
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Concatenate,
-    Iterable,
-    Self,
-    Type,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Concatenate, Self, overload
 
 from .core import UNSET, ParaO, TypedAlias, Unset, Value, _DecoratorParam, eager
 from .misc import ContextValue
@@ -24,7 +16,7 @@ __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
 @lru_cache
 def _method_1st_arg_annotation[T](
     func: Callable[Concatenate[Any, T, ...], Any],
-) -> Type[T] | Unset:
+) -> type[T] | Unset:
     for i, param in enumerate(signature(func).parameters.values()):
         if i == 1:
             if param.kind in (
@@ -65,7 +57,7 @@ class _Act[T, R, A: _Action, I: ParaO](ABC):
 
 class _Action[T, R, **Ps](_DecoratorParam[T, Callable[Concatenate[ParaO, Ps], R]]):
     significant = False
-    _act: Type[_Act] = _Act
+    _act: type[_Act] = _Act
     TypedAlias.register(R, "return_type")
 
     def _type(self, cls, name):
@@ -147,7 +139,7 @@ class ValueAction[T, R](_Action[T, R, [T]]):
         return typ
 
     func: Callable[[ParaO, T], R]
-    type: Type[T]
+    type: type[T]
     _act = ValueAct
 
 

@@ -1,23 +1,12 @@
 from abc import ABCMeta
+from collections.abc import Callable, Collection, Generator, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from functools import lru_cache, partial
 from itertools import count
 from math import inf
 from pickle import PicklingError
 from types import GenericAlias
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Generator,
-    Iterable,
-    Iterator,
-    Mapping,
-    Protocol,
-    Self,
-    get_type_hints,
-    overload,
-)
+from typing import Any, Protocol, Self, get_type_hints, overload
 from warnings import catch_warnings
 from weakref import WeakSet
 
@@ -150,9 +139,9 @@ class Solutions(dict["_Param", list["Arguments | Fragment"]]):
 
     def __init__(self, args: "Arguments", ref: "ParaOMeta"):
         super().__init__()
-        com: list["Arguments | Fragment"]
-        gat: list["Arguments | Fragment"]
-        val: dict["_Param", Value]
+        com: list[Arguments | Fragment]
+        gat: list[Arguments | Fragment]
+        val: dict[_Param, Value]
         self._com = com = []
         self._gat = gat = []
         self._val = val = {}

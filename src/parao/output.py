@@ -2,6 +2,7 @@ import json
 import os
 import pickle
 import re
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import KW_ONLY, dataclass
 from errno import EXDEV
 from functools import partial
@@ -11,18 +12,7 @@ from pathlib import Path
 from shutil import copy2, copytree, rmtree
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import GenericAlias, UnionType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Iterable,
-    Self,
-    Sequence,
-    Type,
-    TypeAliasType,
-    _AnnotatedAlias,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, Self, TypeAliasType, _AnnotatedAlias, overload
 from warnings import warn
 
 from .action import RecursiveAction
@@ -288,7 +278,7 @@ class Output[R, A: RunAct](_Output[R, A]):
 
     # type stuff
     @property
-    def fsoutput_type(self) -> Type[FSOutput]:
+    def fsoutput_type(self) -> type[FSOutput]:
         for typ in self.unpacked_types:
             if isinstance(typ, type) and issubclass(typ, FSOutput):
                 return typ
@@ -362,7 +352,7 @@ class PlainTemplate(_Template):
     dir_temp = Param[str | None](None)
     coders_extra = Param[list[Coder] | tuple[Coder, ...]](())
 
-    _output_cls: Type[Output] = Output
+    _output_cls: type[Output] = Output
     _coders = (
         Coder(".dir", typ=Dir),
         Coder(".file", typ=File),

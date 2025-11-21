@@ -2,26 +2,17 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
 from itertools import count
 from operator import attrgetter
-from typing import Iterable
 
 from .action import Plan
 from .cast import cast
-from .core import (
-    Arguments,
-    Expansion,
-    Fragment,
-    ParaO,
-    ParaOMeta,
-    Value,
-    _Param,
-    eager,
-)
+from .core import Arguments, Expansion, Fragment, ParaO, ParaOMeta, Value, _Param, eager
 from .misc import PeekableIter, ewarn, is_subseq
 
 
