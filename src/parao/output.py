@@ -28,7 +28,7 @@ from warnings import warn
 from .action import RecursiveAction
 from .core import (
     UNSET,
-    AbstractParam,
+    _Param,
     Const,
     ParaO,
     Param,
@@ -36,7 +36,7 @@ from .core import (
     UntypedWarning,
     get_inner_parao,
 )
-from .misc import _StrOpBuffer
+from .misc import StrOpBuffer
 from .print import PPrint
 from .run import _Output, _RunAction, _Template, PseudoOutput, _RunAct
 from .shash import hex_hash, primitives
@@ -498,7 +498,7 @@ class FancyTemplate(PlainTemplate):
         smod = self.small_mod
         lmod = self.label_mod
 
-        small = _StrOpBuffer(self.small_join.join)
+        small = StrOpBuffer(self.small_join.join)
         for pos, name, enc in cand:
             if isinstance(enc, str):
                 if not smod or pos % smod:  # want small
@@ -570,10 +570,10 @@ class Task[R](ParaO):
 
     def __init_subclass__(cls):
         v = cls.__dict__.get("code_version")
-        if v is not None and not isinstance(v, AbstractParam):
+        if v is not None and not isinstance(v, _Param):
             cls.code_version = Const(v)
         r = cls.__dict__.get("run")
-        if r is not None and not isinstance(r, AbstractParam):
+        if r is not None and not isinstance(r, _Param):
             cls.run = RunAction(r)
         return super().__init_subclass__()
 

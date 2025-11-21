@@ -15,7 +15,7 @@ from typing import (
     overload,
 )
 
-from .core import UNSET, AbstractDecoParam, ParaO, TypedAlias, Unset, Value, eager
+from .core import UNSET, _DecoratorParam, ParaO, TypedAlias, Unset, Value, eager
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
@@ -41,7 +41,7 @@ def _method_1st_arg_annotation[T](
 
 
 @dataclass(slots=True, frozen=True)
-class BaseAct[T, R, A: BaseAction, I: ParaO](ABC):
+class _Act[T, R, A: _Action, I: ParaO](ABC):
     action: A
     instance: I
     value: T
@@ -63,15 +63,15 @@ class BaseAct[T, R, A: BaseAction, I: ParaO](ABC):
     def __call__(self) -> R: ...
 
 
-class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps], R]]):
+class _Action[T, R, **Ps](_DecoratorParam[T, Callable[Concatenate[ParaO, Ps], R]]):
     significant = False
-    _act: Type[BaseAct] = BaseAct
+    _act: Type[_Act] = _Act
     TypedAlias.register(R, "return_type")
 
     def _type(self, cls, name):
         return self.type
 
-    def _get(self, val, name, instance) -> BaseAct:
+    def _get(self, val, name, instance) -> _Act:
         pos = val.position if isinstance(val, Value) else 0
         val = super()._get(val, name, instance)
         return self._act(self, instance, val, pos)
@@ -84,13 +84,13 @@ class BaseAction[T, R, **Ps](AbstractDecoParam[T, Callable[Concatenate[ParaO, Ps
         @overload
         def __get__[I: ParaO](
             self, inst: I, owner: type | None = None
-        ) -> BaseAct[T, R, Self, I]: ...
+        ) -> _Act[T, R, Self, I]: ...
         @overload
-        def __get__(self, inst: None | BaseAct, owner: type | None = None) -> Self: ...
+        def __get__(self, inst: None | _Act, owner: type | None = None) -> Self: ...
 
 
 # simple variant
-class SimpleAct[R, A: SimpleAction, I: ParaO](BaseAct[bool, R, A, I]):
+class SimpleAct[R, A: SimpleAction, I: ParaO](_Act[bool, R, A, I]):
     __slots__ = ()
 
     @property
@@ -101,7 +101,7 @@ class SimpleAct[R, A: SimpleAction, I: ParaO](BaseAct[bool, R, A, I]):
         return self.action.func(self.instance)
 
 
-class SimpleAction[R](BaseAction[bool, R, []]):
+class SimpleAction[R](_Action[bool, R, []]):
     if TYPE_CHECKING:
 
         @overload
@@ -119,7 +119,7 @@ class SimpleAction[R](BaseAction[bool, R, []]):
 
 
 # value variant
-class ValueAct[T, R, A: ValueAction, I: ParaO](BaseAct[T, R, A, I]):
+class ValueAct[T, R, A: ValueAction, I: ParaO](_Act[T, R, A, I]):
     __slots__ = ()
 
     def __call__(self, override: T | Unset = UNSET) -> R:
@@ -130,7 +130,7 @@ class ValueAct[T, R, A: ValueAction, I: ParaO](BaseAct[T, R, A, I]):
             return self.action.func(self.instance, value)
 
 
-class ValueAction[T, R](BaseAction[T, R, [T]]):
+class ValueAction[T, R](_Action[T, R, [T]]):
     if TYPE_CHECKING:
 
         @overload
@@ -152,9 +152,7 @@ class ValueAction[T, R](BaseAction[T, R, [T]]):
 
 
 # recursive variant
-class RecursiveAct[R, A: BaseRecursiveAction, I: ParaO](
-    BaseAct[int | bool | None, R, A, I]
-):
+class RecursiveAct[R, A: _RecursiveAction, I: ParaO](_Act[int | bool | None, R, A, I]):
     __slots__ = ()
 
     def _inner(self):
@@ -191,7 +189,7 @@ class RecursiveAct[R, A: BaseRecursiveAction, I: ParaO](
         )
 
 
-class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
+class _RecursiveAction[R, **Ps](_Action[int | bool | None, R, Ps]):
     if TYPE_CHECKING:
 
         @overload
@@ -216,22 +214,22 @@ class BaseRecursiveAction[R, **Ps](BaseAction[int | bool | None, R, Ps]):
     _act = RecursiveAct
 
 
-class RecursiveAction(BaseRecursiveAction[bool, [int]]):
+class RecursiveAction(_RecursiveAction[bool, [int]]):
     func: Callable[[ParaO, int], bool]
 
 
-class Plan(list[BaseAct]):
+class Plan(list[_Act]):
     current = ContextValue["Plan"]("currentPlan", default=None)
     _sorted: bool = False
 
     @classmethod
-    def add(cls, act: BaseAct):
+    def add(cls, act: _Act):
         if (curr := cls.current()) is not None:
             curr.append(act)
             curr._sorted = False
 
     @classmethod
-    def consume(cls, act: BaseAct):
+    def consume(cls, act: _Act):
         if not (curr := cls.current()):
             return
         try:

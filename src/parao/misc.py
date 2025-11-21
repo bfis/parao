@@ -108,7 +108,7 @@ def is_subseq(needles, haystack):
     return all(needle in haystack for needle in needles)
 
 
-class _StrOpBuffer(list[str]):
+class StrOpBuffer(list[str]):
     __slots__ = ("func",)
 
     def __init__(self, func: Callable[[Self], str]):

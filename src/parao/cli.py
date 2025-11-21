@@ -13,7 +13,7 @@ from typing import Iterable, get_origin
 from .action import Plan
 from .cast import cast
 from .core import (
-    AbstractParam,
+    _Param,
     Arguments,
     Expansion,
     Fragment,
@@ -299,7 +299,7 @@ class CLI:
         return (
             self._parse_mod_att(
                 mod_att,
-                (type, AbstractParam, str)[:2],  # no strings
+                (type, _Param, str)[:2],  # no strings
                 UnsupportedKeyType,
             )
             or mod_att[0]

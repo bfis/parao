@@ -43,7 +43,7 @@ _param_counter = count()
 
 
 # type KeyE = type | object | str
-type KeyE = str | type | AbstractParam
+type KeyE = str | type | _Param
 type KeyT = tuple[KeyE, ...]
 type KeyTE = KeyT | KeyE
 type TypT = type | GenericAlias
@@ -88,7 +88,7 @@ class Value[T: Any]:
 
 @dataclass(slots=True, frozen=True)
 class Fragment:
-    param: "str | AbstractParam | None"
+    param: "str | _Param | None"
     types: tuple[type] | None
     inner: "Fragment | Arguments | Value"
 
@@ -107,7 +107,7 @@ class Fragment:
         for k in it:
             if isinstance(k, type):
                 types.append(k)
-            elif isinstance(k, (str, AbstractParam)):
+            elif isinstance(k, (str, _Param)):
                 return cls(k, tuple(types) if types else None, cls._make(it, value))
             else:
                 raise TypeError(f"invaid key components: {k!r}")
@@ -134,12 +134,12 @@ class Fragment:
 
 
 @lru_cache
-class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
+class Solutions(dict["_Param", list["Arguments | Fragment"]]):
     __slots__ = ("_com", "_gat", "_val")
     _com: "Arguments"  # a list during __init__
     _gat: "Arguments"  # a list during __init__
 
-    def __call__(self, key: "AbstractParam") -> tuple["Arguments", Value | None]:
+    def __call__(self, key: "_Param") -> tuple["Arguments", Value | None]:
         if su := self.get(key):  # could use .pop
             su = Arguments.from_list(su)
         else:
@@ -152,7 +152,7 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
         super().__init__()
         com: list["Arguments | Fragment"]
         gat: list["Arguments | Fragment"]
-        val: dict["AbstractParam", Value]
+        val: dict["_Param", Value]
         self._com = com = []
         self._gat = gat = []
         self._val = val = {}
@@ -161,7 +161,7 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
         op = ref.__own_parameters__
         for arg in args:
             if isinstance(arg, Arguments):
-                oth = _Solution(arg, ref)
+                oth = Solutions(arg, ref)
                 for k, v in oth._val.items():
                     val[k] = val.get(k) | v
                 if len(ga := oth._gat) < len(co := oth._com):
@@ -205,7 +205,7 @@ class _Solution(dict["AbstractParam", list["Arguments | Fragment"]]):
         else:
             self._gat = args
 
-    def __missing__(self, key: "AbstractParam") -> list["Arguments | Fragment"]:
+    def __missing__(self, key: "_Param") -> list["Arguments | Fragment"]:
         src = self._gat if key.gatekeeper else self._com
         self[key] = ret = src.copy()
         return ret
@@ -278,7 +278,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         return self.__class__.__name__ + (tuple.__repr__(self) if self else "()")
 
     def solve_value(self, param, owner, name) -> tuple["Arguments", "Value | None"]:
-        return _Solution(self, owner)(param)
+        return Solutions(self, owner)(param)
 
     @lru_cache
     def solve_class(
@@ -374,9 +374,9 @@ class HasArguments(Protocol):
 eager = ContextValue[bool]("eager", default=False)
 
 
-class OwnParameters(dict[str, "AbstractParam"]):
+class OwnParameters(dict[str, "_Param"]):
     __slots__ = ("vals",)
-    vals: set["AbstractParam"]
+    vals: set["_Param"]
 
     class CacheReset(RuntimeWarning): ...
 
@@ -385,11 +385,11 @@ class OwnParameters(dict[str, "AbstractParam"]):
             (name, param)
             for name in dir(cls)
             if not name.startswith("__")
-            and isinstance((param := getattr(cls, name)), AbstractParam)
+            and isinstance((param := getattr(cls, name)), _Param)
         )
         self.vals = set(self.values())
 
-    def got(self, key: "str | AbstractParam") -> "AbstractParam | None":
+    def got(self, key: "str | _Param") -> "_Param | None":
         if key in self.vals or (key := self.get(key)):
             return key
 
@@ -416,14 +416,14 @@ class ParaOMeta(ABCMeta):
     def __setattr__(cls, name, value):
         if not name.startswith("_"):
             OwnParameters.reset()
-            if isinstance(value, AbstractParam):
+            if isinstance(value, _Param):
                 value.__set_name__(cls, name)
         return super().__setattr__(name, value)
 
     def __delattr__(cls, name):
         if not name.startswith("_"):
             OwnParameters.reset()
-            if isinstance((old := getattr(cls, name, None)), AbstractParam):
+            if isinstance((old := getattr(cls, name, None)), _Param):
                 old.__set_name__(cls, None)
         return super().__delattr__(name)
 
@@ -512,7 +512,7 @@ class ParaO(metaclass=ParaOMeta):
         self,
         *,
         compact: bool | str = False,
-        param: "AbstractParam" = None,
+        param: "_Param" = None,
         param_name: str = None,
     ):
         if compact:
@@ -542,7 +542,7 @@ class ParaO(metaclass=ParaOMeta):
 
 class UntypedWarning(RuntimeWarning):
     @classmethod
-    def warn(cls, param: "AbstractParam", instance: "ParaO", name: str | None = None):
+    def warn(cls, param: "_Param", instance: "ParaO", name: str | None = None):
         if name is None:
             name = param._name(type(instance))
         ewarn(f"{type(param)} {name} on {type(instance)}", category=cls)
@@ -574,7 +574,7 @@ def _get_type_hints(cls: "ParaOMeta"):
 
 
 ### actual code
-class AbstractParam[T]:
+class _Param[T]:
     significant: bool = True
     gatekeeper: bool = False
     neutral: T = UNSET
@@ -693,7 +693,7 @@ class AbstractParam[T]:
     type = UNSET
 
 
-class Const[T](AbstractParam[T]):
+class Const[T](_Param[T]):
     def __init__(self, value: T, **kwargs):
         super().__init__(value=value, **kwargs)
 
@@ -701,7 +701,7 @@ class Const[T](AbstractParam[T]):
         return self if instance is None else self.value
 
 
-class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
+class _DecoratorParam[T, F: Callable](_Param[T]):
     def __init__(self, func: F, **kwargs):
         assert callable(func)
         super().__init__(func=func, **kwargs)
@@ -725,7 +725,7 @@ class AbstractDecoParam[T, F: Callable](AbstractParam[T]):
     func: F
 
 
-class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
+class Prop[T](_DecoratorParam[T, Callable[[ParaO], T]]):
     def _type(self, cls, name):
         typ = getattr(self.func, "__annotations__", {}).get("return", UNSET)
         if typ is UNSET:
@@ -740,7 +740,7 @@ class Prop[T](AbstractDecoParam[T, Callable[[ParaO], T]]):
 class MissingParameterValue(TypeError): ...
 
 
-class Param[T](AbstractParam[T]):
+class Param[T](_Param[T]):
     def __init__(self, default=UNSET, **kwargs):
         super().__init__(default=default, **kwargs)
 
@@ -777,7 +777,7 @@ class Expansion[T](BaseException):
 
     def test(self, item: KeyE | Iterable[KeyE]):
         match item:
-            case AbstractParam():
+            case _Param():
                 return self.param is item
             case str():
                 return bool(self.param_name == item)
@@ -786,7 +786,7 @@ class Expansion[T](BaseException):
             case _:
                 return all(map(self.test, item))
 
-    def process(self, param: AbstractParam, inst: ParaO, value: Value | None):
+    def process(self, param: _Param, inst: ParaO, value: Value | None):
         # leave marks of origin
         if not self._frames:
             self.param = param

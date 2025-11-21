@@ -1,5 +1,5 @@
 from collections import defaultdict
-from .core import AbstractParam, Fragment, KeyTE, ParaO, get_inner_parao
+from .core import _Param, Fragment, KeyTE, ParaO, get_inner_parao
 from .misc import ewarn
 
 
@@ -8,7 +8,7 @@ def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
     op = cls.__own_parameters__
 
     com: list[Fragment] = []
-    sub: defaultdict[AbstractParam, list[Fragment]] = defaultdict(com.copy)
+    sub: defaultdict[_Param, list[Fragment]] = defaultdict(com.copy)
     for frag in fragments:
         com.append(frag)
         for s in sub.values():

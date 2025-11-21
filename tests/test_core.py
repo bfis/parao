@@ -6,7 +6,7 @@ from warnings import catch_warnings
 from parao.core import (
     UNSET,
     OwnParameters,
-    AbstractParam,
+    _Param,
     Arguments,
     Const,
     Expansion,
@@ -153,31 +153,31 @@ class TestParam(TestCase):
     def test_typed_alias(self):
         with self.assertWarns(TypedAliasMismatch):
 
-            class WonkyParam[A, B, C](AbstractParam[B]): ...
+            class WonkyParam[A, B, C](_Param[B]): ...
 
         WonkyParam[int, str, bool]()
 
         class Sentinel:
             pass
 
-        class StrangeParam(AbstractParam):
+        class StrangeParam(_Param):
             type = Sentinel
 
         self.assertIs(StrangeParam().type, Sentinel)
 
         with self.assertWarns(TypedAliasRedefined):
 
-            class RedundantParam[T](AbstractParam[T]):
+            class RedundantParam[T](_Param[T]):
                 TypedAlias.register(T, TypedAlias._typevar2name[T])
 
         with self.assertRaises(TypedAliasClash):
 
-            class ClashingParam[T](AbstractParam[T]):
+            class ClashingParam[T](_Param[T]):
                 TypedAlias.register(T, "not" + TypedAlias._typevar2name[T])
 
         with self.assertWarns(TypedAliasMismatch):
 
-            class MismatchParam[R](AbstractParam[R]): ...
+            class MismatchParam[R](_Param[R]): ...
 
     def test_specialized(self):
         uniq_const = object()
