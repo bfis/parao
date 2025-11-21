@@ -36,6 +36,7 @@ from .core import (
     UntypedWarning,
     get_inner_parao,
 )
+from .misc import _StrOpBuffer
 from .print import PPrint
 from .run import _Output, _RunAction, _Template, PseudoOutput, _RunAct
 from .shash import hex_hash, primitives
@@ -497,7 +498,7 @@ class FancyTemplate(PlainTemplate):
         smod = self.small_mod
         lmod = self.label_mod
 
-        small = _Small(self.small_join.join)
+        small = _StrOpBuffer(self.small_join.join)
         for pos, name, enc in cand:
             if isinstance(enc, str):
                 if not smod or pos % smod:  # want small
@@ -556,19 +557,6 @@ class FancyTemplate(PlainTemplate):
             return joiner(vals)
 
         raise NotImplementedError
-
-
-class _Small(list[str]):
-    __slots__ = ("joiner",)
-
-    def __init__(self, joiner: Callable[[Self], str]):
-        super().__init__()
-        self.joiner = joiner
-
-    def flush(self):
-        ret = self.joiner(self)
-        self.clear()
-        return ret
 
 
 # need them here, otherwise we get cyclic imports with task.py

@@ -1,6 +1,6 @@
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
-from typing import Any, Iterable, overload
+from typing import Any, Callable, Iterable, Self, overload
 
 _sentinel = object()
 
@@ -99,3 +99,16 @@ class PeekableIter[T]:
 def is_subseq(needles, haystack):
     haystack = iter(haystack)
     return all(needle in haystack for needle in needles)
+
+
+class _StrOpBuffer(list[str]):
+    __slots__ = ("func",)
+
+    def __init__(self, func: Callable[[Self], str]):
+        super().__init__()
+        self.func = func
+
+    def flush(self):
+        ret = self.func(self)
+        self.clear()
+        return ret
