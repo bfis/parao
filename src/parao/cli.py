@@ -2,17 +2,29 @@ import json
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Iterable
-from contextlib import nullcontext
+from collections.abc import Collection, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
 from itertools import count
 from operator import attrgetter
+from typing import Any
 
 from .action import Plan
 from .cast import cast
-from .core import Arguments, Expansion, Fragment, ParaO, ParaOMeta, Value, _Param, eager
+from .core import (
+    Arguments,
+    Expansion,
+    Fragment,
+    HasArguments,
+    KeyTE,
+    ParaO,
+    ParaOMeta,
+    Value,
+    _Param,
+    eager,
+)
 from .misc import PeekableIter, ewarn, is_subseq
 
 
@@ -62,6 +74,9 @@ class NotAParaO(ValueError): ...
 
 
 class ValueMissing(ValueError): ...
+
+
+class ValueUnexpected(ValueError): ...
 
 
 class Sep(tuple[str, ...]):
@@ -192,9 +207,16 @@ class UnusedArguments(UnmatchedArguments):
 
 
 class CLI:
-    prase_raw = CLIParser()
+    parse_raw = CLIParser()
 
-    def __init__(self, entry_points: Iterable[ParaOMeta] | None = None):
+    def __init__(
+        self,
+        *args: Arguments
+        | HasArguments
+        | dict[KeyTE, Any]
+        | Collection[str | tuple[KeyTE, Any]],
+        entry_points: Iterable[ParaOMeta] | None = None,
+    ):
         seen = set()
         queue: list[type] = [ParaO] if entry_points is None else list(entry_points)
         for curr in queue:
@@ -208,6 +230,8 @@ class CLI:
             seen.add(curr)
 
         self._paraos = seen
+        self._args = Arguments.EMPTY
+        self._args = Arguments._make(args, parser=self.make_args)
 
     @cached_property
     def find_parao(self):
@@ -299,7 +323,7 @@ class CLI:
         return module
 
     def parse_typ(self, raw: str):
-        return self._parse_mod_att(self.prase_raw.element(raw), ParaOMeta, NotAParaO)
+        return self._parse_mod_att(self.parse_raw.element(raw), ParaOMeta, NotAParaO)
 
     def parse_key(self, mod_att):
         return (
@@ -311,17 +335,22 @@ class CLI:
             or mod_att[0]
         )
 
-    def parse_args(self, args: list[str], position0: int = 100):
+    def parse_args(
+        self, args: list[str], position0: int = 100, typ0: type | None = None
+    ):
         pos = count(position0)
         pre: list[str] = []
         got: list[tuple[ParaOMeta, Arguments, list[str]]] = []
 
-        typ: type = None
-        raw: list[str] = None
-        curr: list[Fragment] = None
+        typ: type = typ0
+        raw: list[str] = None if typ0 is None else []
+        curr0 = [self._args] if self._args else []
+        curr: list[Fragment] = None if typ0 is None else curr0.copy()
 
         pit = PeekableIter(args)
         for arg in pit:
+            if not isinstance(arg, str):
+                raise TypeError(f"expected str, got {type(arg)}")
             if not arg:  # ignore empty standalone args
                 continue
             if body := arg.lstrip("+-"):
@@ -330,7 +359,7 @@ class CLI:
                         pre.append(arg)
                         continue
 
-                    key, flags, value = self.prase_raw.argument(body)
+                    key, flags, value = self.parse_raw.argument(body)
 
                     key = tuple(map(self.parse_key, key))
 
@@ -375,29 +404,40 @@ class CLI:
                     raw.append(arg)
                     curr.append(Fragment.make(key, Value(value, prio, next(pos))))
                 else:
+                    if typ0 is not None:
+                        raise ValueUnexpected(arg)
                     if typ is not None:
-                        got.append((typ, Arguments(curr), raw))
+                        got.append((typ, Arguments.from_list(curr), raw))
                     # solve typ
                     typ = self.parse_typ(body)
                     if not typ:
                         raise ParaONotFound(body)
                     raw = [arg]
-                    curr = []
+                    curr = curr0.copy()
             else:
+                if typ0 is not None:
+                    raise ValueUnexpected(arg)
                 break
 
         if typ is not None:
-            got.append((typ, Arguments(curr), raw))
+            got.append((typ, Arguments.from_list(curr), raw))
 
         return pre, got, list(pit)
 
-    def _wrap(self, pre: list[str], post: list[str]):
+    def make_args(self, args: list[str]):
+        pre, got, post = self.parse_args(args, typ0=object)
+        assert not pre and not post
+        return got[0][1] if got else Arguments.EMPTY
+
+    @contextmanager
+    def _wrap(self, pre: list[str], post: list[str], run: dict[str, Any]):
         if pre:
             ewarn(f"at begin: {' '.join(pre)}", UnusedOptions)
         if post:
             ewarn(f"at end: {' '.join(post)}", UnusedOptions)
 
-        return nullcontext(self._consume)
+        with eager(True), Plan().use(run=run):
+            yield self._consume
 
     def _consume(self, typ: ParaOMeta, args: Arguments, raw: list[str] = ()):
         try:
@@ -416,21 +456,17 @@ class CLI:
                     ]:
                         ewarn(" ".join(names), warning)
 
-    def _run(self, args: list[str]):
-        pre, got, post = self.parse_args(args)
-
-        with eager(True), self._wrap(pre, post) as consume:
-            for item in got:
-                yield from consume(*item)
-
-    def run(self, args: list[str] | None = None, **kwargs):
+    def run(self, args: list[str] | None = None, /, **kwargs):
         if args is None:
             args = sys.argv[1:]
 
-        kwargs.setdefault("run", True)
+        pre, got, post = self.parse_args(args)
 
-        with Plan().use(**kwargs):
-            return list(self._run(args))
+        with self._wrap(pre, post, run=kwargs) as consume:
+            ret: list[ParaO] = []
+            for item in got:
+                ret.extend(consume(*item))
+            return ret
 
 
 if __name__ == "__main__":

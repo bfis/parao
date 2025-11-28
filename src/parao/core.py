@@ -206,10 +206,11 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         return cls._make(args, kwargs)
 
     @classmethod
-    def _make(
+    def _make[P](
         cls,
-        args: "Iterable[Arguments | HasArguments | dict[KeyTE, Any]]",
+        args: "Iterable[Arguments | HasArguments | dict[KeyTE, Any] | P]",
         kwargs: dict[str, Any] = None,
+        parser: Callable[[P], "Iterable[Fragment | Arguments] | None"] | None = None,
     ):
         sub = []
         if arg := cls.context():
@@ -223,6 +224,8 @@ class Arguments(tuple["Arguments | Fragment", ...]):
             elif isinstance(arg, dict):
                 if arg:
                     sub.extend(cls._from_dict(arg))
+            elif parser is not None and (arg := parser(arg)) is not None:
+                sub.extend(arg)
             else:
                 raise TypeError(f"unsupported argument type: {type(arg)}")
         if kwargs:

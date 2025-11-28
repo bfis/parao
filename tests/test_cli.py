@@ -18,6 +18,7 @@ from parao.cli import (
     UnusedArguments,
     UnusedOptions,
     ValueMissing,
+    ValueUnexpected,
 )
 from parao.core import MissingParameterValue, Param, ParaO
 
@@ -130,6 +131,17 @@ def test_params():
     assert cli.run(["Outer1", "--bar=a,b"])[0].bar == "a,b"
     with pytest.raises(ValueError):
         cli.run(["Outer1", "--boo=0,1", "--foo=1,x"])
+
+
+def test_global():
+    # global agruments
+    assert CLI(["--foo", "123"]).run(["Outer1"])[0].foo == 123
+    with pytest.raises(TypeError):
+        CLI([1])
+    with pytest.raises(ValueUnexpected, match="foo"):
+        CLI(["foo"])
+    with pytest.raises(ValueUnexpected, match="--"):
+        CLI(["--"])
 
 
 def test_prio():
