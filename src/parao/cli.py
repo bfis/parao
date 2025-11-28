@@ -13,7 +13,7 @@ from operator import attrgetter
 from typing import Any
 
 from .action import Plan
-from .cast import cast
+from .cast import CastError, cast
 from .core import (
     Arguments,
     Expansion,
@@ -60,7 +60,7 @@ class CLIstr(str):
                 return True
             if (v := self._bool_map.get(self.lower(), None)) is not None:
                 return v
-            raise ValueError(f"{self!r} not interpretable as bool")
+            raise CastError(self, bool)
         if typ is int:
             return int(self, 0)
 

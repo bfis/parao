@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from parao.cast import CastError
 from parao.cli import (
     CLI,
     AmbiguousCandidate,
@@ -101,7 +102,7 @@ def test_params():
     assert cli.run(["Outer1"])[0].boo is None
     assert cli.run(["Outer1", "--boo"])[0].boo is True
     assert cli.run(["Outer1", "--boo=n"])[0].boo is False
-    with pytest.raises(ValueError):
+    with pytest.raises(CastError):
         assert cli.run(["Outer1", "--boo=what?"])[0].boo
     assert cli.run(["Outer1", "--boo", "--bar=b"])[0].boo is True
     # class

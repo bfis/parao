@@ -5,6 +5,14 @@ from typing import Any, Protocol, Union, _AnnotatedAlias, get_args, get_origin
 _numeric = int, float, complex
 
 
+class CastError(TypeError, ValueError):
+    def __init__(self, src, dst):
+        super().__init__(f"{src!r} -> {dst}")
+
+    def __str__(self):
+        return f"cast failed: {super().__str__()}"
+
+
 class Opaque:
     """Ignored during casting unless they are Castable."""
 
@@ -35,17 +43,18 @@ def cast(val: Any, typ: type) -> Any:
         args = get_args(typ)
 
         if ori is UnionType or ori is Union:
+            err = CastError(val, typ)
             for arg in args:
                 try:
                     return cast(val, arg)
-                except (TypeError, ValueError):
-                    pass
-            raise TypeError(f"could not cast {val!r} to {typ}")
+                except (TypeError, ValueError) as exc:
+                    err.add_note(str(exc))
+            raise err
 
         # container types
         if isinstance(ori, type):  # pragma: no branch
             if isinstance(val, (str, bytes)):
-                raise TypeError(f"can't cast {type(val)} to container")
+                raise CastError(type(val), ori)
 
             if issubclass(ori, tuple):
                 if not args:
