@@ -167,10 +167,11 @@ class Output[R, A: RunAct](_Output[R, A]):
         JSON and direct File and Dir output.
     """
 
-    __slots__ = ("coder", "path", "tmp_dir")
+    __slots__ = ("coder", "path", "tmp_dir", "dir_mode")
     coder: Coder[R]
     tmp_dir: Path
     path: Path
+    dir_mode: int
 
     # temp file/dir utility
     @overload
@@ -191,7 +192,7 @@ class Output[R, A: RunAct](_Output[R, A]):
             prefix=path.with_suffix(".tmp").name,
             suffix=path.suffix,
         )
-        dps["dir"].mkdir(parents=True, exist_ok=True)
+        dps["dir"].mkdir(mode=self.dir_mode, parents=True, exist_ok=True)
 
         if (is_dir := self.coder.is_dir) or mode == "":
             if mode or kwargs:
@@ -233,7 +234,7 @@ class Output[R, A: RunAct](_Output[R, A]):
         if not data.exists():
             raise MissingOuput(str(data))
         path = self.path
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(mode=self.dir_mode, parents=True, exist_ok=True)
         data: FSOutput = self.coder.conform(data)
         data.close()
         if not (data._temp or data.tmpio):  # dont steal non-temporaries
@@ -309,6 +310,7 @@ class Output[R, A: RunAct](_Output[R, A]):
 class PlainTemplate(_Template):
     def __call__(self, act: RunAct):
         out = self._output_cls(act)
+        out.dir_mode = self.dir_mode
         out.coder = self._coder(out)
         out.path = self._path(out)
         out.tmp_dir = self._tmp_dir(out)
@@ -349,6 +351,7 @@ class PlainTemplate(_Template):
 
     dir_base = Param[str]()
     dir_temp = Param[str | None](None)
+    dir_mode = Param[int](0o777)
     coders_extra = Param[list[Coder] | tuple[Coder, ...]](())
 
     _output_cls: type[Output] = Output
