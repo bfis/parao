@@ -92,6 +92,10 @@ def test_params():
     assert cli.run(["Outer1", "--foo", "123"])[0].foo == 123
     assert cli.run(["Outer1", "--foo=123"])[0].foo == 123
     assert cli.run(["Outer1", "--Outer1.foo=123"])[0].foo == 123
+    # other integer literals
+    assert cli.run(["Outer1", "--foo", "0x10"])[0].foo == 0x10
+    assert cli.run(["Outer1", "--foo", "0o10"])[0].foo == 0o10
+    assert cli.run(["Outer1", "--foo", "0b10"])[0].foo == 0b10
     # various empties
     assert cli.run(["Outer1", "--bar="])[0].bar == ""
     assert cli.run(["Outer1"])[0].boo is None

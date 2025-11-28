@@ -61,6 +61,8 @@ class CLIstr(str):
             if (v := self._bool_map.get(self.lower(), None)) is not None:
                 return v
             raise ValueError(f"{self!r} not interpretable as bool")
+        if typ is int:
+            return int(self, 0)
 
         return NotImplemented
 
