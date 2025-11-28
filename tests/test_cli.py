@@ -32,6 +32,7 @@ class Outer1(ParaO):
     foo = Param[int](1)
     bar = Param[str]("outer")
     boo = Param[bool](None)
+    ion = Param[int | None](0)
 
 
 class Outer2(ParaO):
@@ -97,6 +98,10 @@ def test_params():
     assert cli.run(["Outer1", "--foo", "0x10"])[0].foo == 0x10
     assert cli.run(["Outer1", "--foo", "0o10"])[0].foo == 0o10
     assert cli.run(["Outer1", "--foo", "0b10"])[0].foo == 0b10
+    # None
+    assert cli.run(["Outer1", "--ion"])[0].ion is None
+    with pytest.raises(CastError):
+        assert cli.run(["Outer1", "--ion", "None"])
     # various empties
     assert cli.run(["Outer1", "--bar="])[0].bar == ""
     assert cli.run(["Outer1"])[0].boo is None

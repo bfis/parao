@@ -10,6 +10,7 @@ from functools import cached_property
 from importlib import import_module
 from itertools import count
 from operator import attrgetter
+from types import NoneType
 from typing import Any
 
 from .action import Plan
@@ -63,6 +64,10 @@ class CLIstr(str):
             raise CastError(self, bool)
         if typ is int:
             return int(self, 0)
+        if typ is NoneType:
+            if self.empty:
+                return None
+            raise CastError(self, None)
 
         return NotImplemented
 
