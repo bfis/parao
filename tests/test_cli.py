@@ -114,6 +114,8 @@ def test_params():
         cli.run(["Outer1", "--foo;json="])
     with pytest.raises(JSONDecodeError):
         cli.run(["Outer1", "--foo;json=]"])
+    # python literals
+    assert cli.run(["Outer1", "--foo;python", "0o123"])[0].foo == 0o123
     # with module
     assert cli.run(["Outer1", "--test_cli.Outer1.foo=123"])[0].foo == 123
     assert cli.run(["Outer1", "--test_cli:Outer1.foo=123"])[0].foo == 123

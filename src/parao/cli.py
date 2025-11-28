@@ -1,8 +1,9 @@
 import json
 import re
 import sys
+from ast import literal_eval
 from collections import defaultdict
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cached_property
@@ -208,6 +209,10 @@ class UnusedArguments(UnmatchedArguments):
 
 class CLI:
     parse_raw = CLIParser()
+    value_parsers: dict[str, Callable[[str], any]] = {
+        "json": json.loads,
+        "python": literal_eval,
+    }
 
     def __init__(
         self,
@@ -377,16 +382,19 @@ class CLI:
                             value = cls
                         else:
                             raise ParaONotFound(value)
-                    elif "json" in flags:
-                        if not value:
-                            raise ValueMissing(arg)
-                        try:
-                            value = json.loads(value)
-                        except Exception as e:
-                            e.add_note(f"for argument {arg}")
-                            raise
                     else:
-                        value = CLIstr(value)
+                        for flag, parser in self.value_parsers.items() if flags else ():
+                            if flag in flags:
+                                if not value:
+                                    raise ValueMissing(arg)
+                                try:
+                                    value = parser(value)
+                                except Exception as e:
+                                    e.add_note(f"while parsing {arg}")
+                                    raise
+                                break
+                        else:
+                            value = CLIstr(value)
 
                     # prio
                     if prio := flags.get("prio", None):
