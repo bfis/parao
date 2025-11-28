@@ -61,7 +61,7 @@ class Task2(BaseTask):
 
 @pytest.fixture
 def tmpdir4BaseTask(tmpdir):
-    with Arguments._ctxargs(Arguments.make({(FancyTemplate, "dir_base"): tmpdir})):
+    with Arguments.context(Arguments.make({(FancyTemplate, "dir_base"): tmpdir})):
         yield tmpdir
 
 

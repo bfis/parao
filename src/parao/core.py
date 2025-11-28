@@ -199,6 +199,8 @@ class Solutions(dict["_Param", list["Arguments | Fragment"]]):
 
 
 class Arguments(tuple["Arguments | Fragment", ...]):
+    __slots__ = ()
+
     @classmethod
     def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
         return cls._make(args, kwargs)
@@ -206,11 +208,11 @@ class Arguments(tuple["Arguments | Fragment", ...]):
     @classmethod
     def _make(
         cls,
-        args: "tuple[Arguments | HasArguments | dict[KeyTE, Any], ...]",
+        args: "Iterable[Arguments | HasArguments | dict[KeyTE, Any]]",
         kwargs: dict[str, Any] = None,
     ):
         sub = []
-        if arg := cls._ctxargs():
+        if arg := cls.context():
             sub.append(arg)
 
         for arg in args:
@@ -348,9 +350,11 @@ class Arguments(tuple["Arguments | Fragment", ...]):
             else:
                 stack.pop()
 
+    EMPTY: "Arguments"
+
 
 Arguments.EMPTY = Arguments()
-Arguments._ctxargs = ContextValue("ContextArguments", default=Arguments.EMPTY)
+Arguments.context = ContextValue("ContextArguments", default=Arguments.EMPTY)
 
 
 class HasArguments(Protocol):
@@ -637,7 +641,7 @@ class _Param[T]:
             val = None
 
         try:
-            with Arguments._ctxargs(Arguments.from_list(args)):
+            with Arguments.context(Arguments.from_list(args)):
                 return self._get(val, name, instance)
         except Expansion as exp:
             exp.process(self, instance, val)
