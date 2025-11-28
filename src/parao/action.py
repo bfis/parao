@@ -235,18 +235,20 @@ class Plan(list[_Act]):
             return True
 
     @contextmanager
-    def use(self, /, run: bool = False):
+    def use(self, /, run: bool | dict[str, Any] = False):
         with self.current(self), eager(True):
             yield
-            if run:
-                self.run()
+            if run is not False:
+                if run is True:
+                    run = {}
+                self.run(**run)
 
     def sort(self):
         if not self._sorted:
             super().sort(key=attrgetter("position"))
             self._sorted = True
 
-    def run(self):
+    def run(self, **kwargs):
         while self:
             self.sort()
-            self.pop(0)()
+            self.pop(0)(**kwargs)
