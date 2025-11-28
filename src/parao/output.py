@@ -557,7 +557,7 @@ pprint = PPrint()
 class Task[R](ParaO):
     code_version: Const
     run: RunAction[R]
-    output = Param[FancyTemplate](significant=False)
+    output = Param[FancyTemplate](significant=False, gatekeeper=True)
 
     def __init_subclass__(cls):
         v = cls.__dict__.get("code_version")
