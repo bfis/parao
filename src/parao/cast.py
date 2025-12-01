@@ -92,7 +92,7 @@ def cast(val: Any, typ: type) -> Any:
         return None
     elif isinstance(val, typ):
         return val
-    elif isinstance(val, str) and (
+    elif (val is None or isinstance(val, str)) and (
         typ is bool or isinstance(type, typ) and issubclass(typ, bool)
     ):
         raise TypeError(f"can't cast {val!r} to {typ}")
