@@ -856,15 +856,16 @@ class Expansion[T](BaseException):
     def generate(
         typ: ParaOMeta, args: Arguments, **kwargs
     ) -> Generator[ParaO, None, None]:
-        try:
-            yield typ(args)
-        except Expansion as exp:
-            exp.make = lambda arg: typ(Arguments((args, arg)))
+        with eager(True):
             try:
-                yield from exp.expand(**kwargs)
-            except Exception as exc:
-                exc.add_note(f"while expanding: {exp!r}")
-                raise
+                yield typ(args)
+            except Expansion as exp:
+                exp.make = lambda arg: typ(Arguments((args, arg)))
+                try:
+                    yield from exp.expand(**kwargs)
+                except Exception as exc:
+                    exc.add_note(f"while expanding: {exp!r}")
+                    raise
 
     @property
     def param_name(self):

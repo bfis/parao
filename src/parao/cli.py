@@ -4,11 +4,10 @@ import sys
 from ast import literal_eval
 from collections import defaultdict
 from collections.abc import Callable, Collection, Iterable
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cached_property
 from importlib import import_module
-from itertools import count
+from itertools import count, starmap
 from operator import attrgetter
 from types import NoneType
 from typing import Any
@@ -25,7 +24,6 @@ from .core import (
     ParaOMeta,
     Value,
     _Param,
-    eager,
 )
 from .misc import PeekableIter, ewarn, is_subseq
 
@@ -444,16 +442,6 @@ class CLI:
         assert not pre and not post
         return got[0][1] if got else Arguments.EMPTY
 
-    @contextmanager
-    def _wrap(self, pre: list[str], post: list[str], run: dict[str, Any]):
-        if pre:
-            ewarn(f"at begin: {' '.join(pre)}", UnusedOptions)
-        if post:
-            ewarn(f"at end: {' '.join(post)}", UnusedOptions)
-
-        with eager(True), Plan().use(run=run):
-            yield self._consume
-
     def _consume(self, typ: ParaOMeta, args: Arguments, raw: list[str] = ()):
         try:
             yield from Expansion.generate(typ, args)
@@ -477,11 +465,14 @@ class CLI:
 
         pre, got, post = self.parse_args(args)
 
-        with self._wrap(pre, post, run=kwargs) as consume:
-            ret: list[ParaO] = []
-            for item in got:
-                ret.extend(consume(*item))
-            return ret
+        if pre:
+            ewarn(f"at begin: {' '.join(pre)}", UnusedOptions)
+        if post:
+            ewarn(f"at end: {' '.join(post)}", UnusedOptions)
+
+        chunks = list(map(list, starmap(self._consume, got)))
+        Plan().run(*chunks, **kwargs)
+        return sum(chunks, [])
 
 
 if __name__ == "__main__":

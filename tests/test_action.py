@@ -1,9 +1,51 @@
 from typing import Any
 from unittest import TestCase
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 from parao.action import Plan, RecursiveAction, SimpleAction, ValueAction
 from parao.core import Param, ParaO, Prop, UntypedParameter, Value
+
+
+class FooBase(ParaO):
+    act = RecursiveAction(lambda: None)
+    aux = Param[int](0)
+
+
+class FooNoAct(FooBase):
+    act = None
+
+
+class FooOtherAct(FooBase):
+    act = Param[Any](None)
+
+
+class Foo1(FooBase):
+    foo_no_act = Param[FooNoAct]()
+    foo_other_act = Param[FooOtherAct]()
+
+
+class Foo2(FooBase):
+    foo1 = Param[Foo1]()
+
+
+class Foo3(FooBase):
+    foo2 = Param[Foo2]()
+
+
+class FooMix(FooBase):
+    @Prop
+    def inner(self) -> list[FooBase]:
+        return [Foo1(), Foo2()][::-1]
+
+    @SimpleAction
+    def interrupter(self): ...
+
+
+class FooBad(FooBase):
+    @Prop
+    def bad(self) -> Foo2:
+        Foo1(act=True, aux=1).act  # dead "branch"
+        return Foo2()
 
 
 class TestAction(TestCase):
@@ -13,20 +55,13 @@ class TestAction(TestCase):
         class Foo(ParaO):
             act = SimpleAction(func)
 
-        with Plan().use(run=True):
-            foo = Foo()
+        Plan().run([Foo()])
         func.assert_not_called()
 
-        with Plan().use(run=True):
-            foo = Foo({"act": False})
+        Plan().run([Foo({"act": False})])
         func.assert_not_called()
 
-        with Plan().use(run=False):
-            foo = Foo({"act": True})
-        func.assert_not_called()
-
-        with Plan().use(run=True):
-            foo = Foo({"act": True})
+        foo = Plan().run1(Foo({"act": True}))
         func.assert_called_once_with(foo)
 
         func.reset_mock()
@@ -67,8 +102,8 @@ class TestAction(TestCase):
         with self.assertRaises(TypeError):
             Foo().act()
 
-        with Plan().use(run=True), self.assertWarns(UntypedParameter):
-            foo = Foo({"act": 123})
+        with self.assertWarns(UntypedParameter):
+            Plan().run([foo := Foo({"act": 123})])
         mock.assert_called_once_with(foo, 123)
 
         mock.reset_mock()
@@ -86,96 +121,80 @@ class TestAction(TestCase):
     def test_recursive_action(self):
         mock = Mock(return_value=None)
 
-        class FooBase(ParaO):
-            act = RecursiveAction(mock)
-
-        class FooNoAct(FooBase):
-            act = None
-
-        class FooOtherAct(FooBase):
-            act = Param[Any](None)
-
-        class Foo1(FooBase):
-            foo_no_act = Param[FooNoAct]()
-            foo_other_act = Param[FooOtherAct]()
-
-        class Foo2(FooBase):
-            foo1 = Param[Foo1]()
-
-        class Foo3(FooBase):
-            foo2 = Param[Foo2]()
-
-        class FooMix(FooBase):
-            @Prop
-            def inner(self) -> list[FooBase]:
-                return [Foo1(), Foo2()][::-1]
-
-            @SimpleAction
-            def interrupter(self): ...
-
-        mock.reset_mock()
-        with Plan().use(run=True):
-            mix4 = FooMix({"act": 3, ("inner", "act"): True})
-        mock.assert_has_calls(
-            [
-                call(mix4, 0),
-                call(mix4.inner[0], 1),
-                call(mix4.inner[0].foo1, 2),
-                call(mix4.inner[1], 1),
-            ]
-        )
-        self.assertEqual(mock.call_count, 4)
-
-        mock.reset_mock()
-        with Plan().use(run=True):
-            mix6 = FooMix(
-                {
-                    "act": 3,
-                    "interrupter": Value(True, position=1),
-                    (Foo2, "act"): Value(True, position=2),
-                }
+        with patch.object(FooBase.act, "func", mock):
+            mock.reset_mock()
+            mix4 = Plan.run1(FooMix({"act": 3, ("inner", "act"): True}))
+            mock.assert_has_calls(
+                [
+                    call(mix4, 0),
+                    call(mix4.inner[0], 1),
+                    call(mix4.inner[0].foo1, 2),
+                    call(mix4.inner[1], 1),
+                ]
             )
-        mock.assert_has_calls(
-            [
-                call(mix6, 0),
-                call(mix6.inner[0], 1),
-                call(mix6.inner[0].foo1, 2),
-                call(mix6.inner[1], 1),
-                call(mix6.inner[0], 0),
-                call(mix6.inner[0].foo1, 1),
-            ]
-        )
-        self.assertEqual(mock.call_count, 6)
+            self.assertEqual(mock.call_count, 4)
 
-        with Plan().use(run=True):
-            foo3 = Foo3(act=True)
-        mock.assert_has_calls(
-            [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
-        )
+            mock.reset_mock()
+            mix6 = Plan.run1(
+                FooMix(
+                    {
+                        "act": 3,
+                        "interrupter": Value(True, position=1),
+                        (Foo2, "act"): Value(True, position=2),
+                    }
+                )
+            )
+            mock.assert_has_calls(
+                [
+                    call(mix6, 0),
+                    call(mix6.inner[0], 1),
+                    call(mix6.inner[0].foo1, 2),
+                    call(mix6.inner[1], 1),
+                    call(mix6.inner[0], 0),
+                    call(mix6.inner[0].foo1, 1),
+                ]
+            )
+            self.assertEqual(mock.call_count, 6)
 
-        mock.reset_mock()
-        foo3.act(1)
-        mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.reset_mock()
+            mixB = Plan.run1(FooBad(act=True))
+            mock.assert_has_calls(
+                [
+                    call(mixB, 0),
+                    call(mixB.bad, 1),
+                    call(mixB.bad.foo1, 2),
+                ]
+            )
+            self.assertEqual(mock.call_count, 3)
 
-        mock.reset_mock()
-        (foo3 := Foo3()).act()
-        mock.assert_has_calls(
-            [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
-        )
+            foo3 = Plan.run1(Foo3(act=True))
+            mock.assert_has_calls(
+                [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
+            )
 
-        mock.reset_mock()
-        (foo3 := Foo3({(Foo1, "act"): False})).act()
-        mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.reset_mock()
+            foo3.act(1)
+            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
 
-        mock.reset_mock()
-        (foo3 := Foo3()).act(1)
-        mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.reset_mock()
+            (foo3 := Foo3()).act()
+            mock.assert_has_calls(
+                [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
+            )
 
-        mock.reset_mock()
-        (foo3 := Foo3()).act(0)
-        mock.assert_has_calls([call(foo3, 0)])
+            mock.reset_mock()
+            (foo3 := Foo3({(Foo1, "act"): False})).act()
+            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
 
-        mock.reset_mock()
-        mock.return_value = True
-        (foo3 := Foo3()).act()
-        mock.assert_has_calls([call(foo3, 0)])
+            mock.reset_mock()
+            (foo3 := Foo3()).act(1)
+            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+
+            mock.reset_mock()
+            (foo3 := Foo3()).act(0)
+            mock.assert_has_calls([call(foo3, 0)])
+
+            mock.reset_mock()
+            mock.return_value = True
+            (foo3 := Foo3()).act()
+            mock.assert_has_calls([call(foo3, 0)])

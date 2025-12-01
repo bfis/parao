@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from inspect import Parameter, signature
 from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Concatenate, Self, overload
 
-from .core import UNSET, ParaO, TypedAlias, Unset, Value, _DecoratorParam, eager
+from .core import (
+    UNSET,
+    ParaO,
+    TypedAlias,
+    Unset,
+    Value,
+    _DecoratorParam,
+    get_inner_parao,
+)
 from .misc import ContextValue
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
@@ -40,8 +47,7 @@ class _Act[T, R, A: _Action, I: ParaO](ABC):
     position: int = 0
 
     def __post_init__(self):
-        if self.trigger:
-            Plan.add(self)
+        pass  # keep it, so we can use it fill _Run.output "cache"
 
     @property
     def trigger(self):
@@ -212,13 +218,22 @@ class RecursiveAction(_RecursiveAction[bool, [int]]):
 
 class Plan(list[_Act]):
     current = ContextValue["Plan"]("currentPlan", default=None)
-    _sorted: bool = False
 
-    @classmethod
-    def add(cls, act: _Act):
-        if (curr := cls.current()) is not None:
-            curr.append(act)
-            curr._sorted = False
+    def add(self, targets: Iterable[ParaO]):
+        seen = set()
+        queue = list(targets)
+        while queue:
+            curr = queue.pop()
+            for param in curr.__class__.__own_parameters__.values():
+                value = param.__get__(curr)
+                if isinstance(value, _Act):
+                    if value.trigger:
+                        self.append(value)
+                else:
+                    for inner in get_inner_parao(value):
+                        if inner not in seen:
+                            seen.add(inner)
+                            queue.append(inner)
 
     @classmethod
     def consume(cls, act: _Act):
@@ -234,21 +249,19 @@ class Plan(list[_Act]):
             del curr[idx]
             return True
 
-    @contextmanager
-    def use(self, /, run: bool | dict[str, Any] = False):
-        with self.current(self), eager(True):
-            yield
-            if run is not False:
-                if run is True:
-                    run = {}
-                self.run(**run)
-
     def sort(self):
-        if not self._sorted:
-            super().sort(key=attrgetter("position"))
-            self._sorted = True
+        super().sort(key=attrgetter("position"))
 
-    def run(self, **kwargs):
-        while self:
-            self.sort()
-            self.pop(0)(**kwargs)
+    def run(self, *args: Iterable[ParaO], **kwargs) -> Self:
+        for arg in args:
+            self.add(arg)
+        self.sort()
+        with self.current(self):
+            while self:
+                self.pop(0)(**kwargs)
+        return self
+
+    @classmethod
+    def run1[P: ParaO](cls, inst: P) -> P:
+        cls().run([inst])
+        return inst

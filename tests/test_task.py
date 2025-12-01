@@ -82,10 +82,14 @@ def test(tmpdir4BaseTask):
 
         assert isinstance(t1.run, RunAct)
         assert t1.run.action.return_type == tuple[int, str]
+        assert t1.run._key == (t1, Task1.run)
 
+        assert t1.run.output is t1.run.output
         assert not t1.run.output.path.exists()
         assert not t1.run.output.exists
         assert not t1.run.done
+        with pytest.raises(AttributeError):
+            t1.run.does_not_exist
 
         assert t1.run() is return_sentinel
         mock.assert_called_once_with(t1)
