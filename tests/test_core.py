@@ -183,13 +183,13 @@ class TestParam(TestCase):
     def test_specialized(self):
         uniq_const = object()
         uniq_aux = object()
-        uniq_return = object()
-        uniq_override = object()
+        uniq_return = ParaO()
+        uniq_override = ParaO()
 
         class Special(ParaO):
             const = Const(uniq_const)
 
-            prop: object
+            prop: ParaO
 
             @Prop(aux=uniq_aux)
             def prop(self):

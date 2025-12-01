@@ -726,8 +726,7 @@ class Prop[T](_DecoratorParam[T, Callable[[ParaO], T]]):
         return typ
 
     def _get(self, val, name, instance) -> T:
-        raw = super()._get(val, name, instance)
-        return self.func(instance) if raw is UNSET else raw
+        return self.func(instance) if val is None else super()._get(val, name, instance)
 
 
 class MissingParameterValue(TypeError): ...
