@@ -81,8 +81,9 @@ class Fragment:
     inner: "Fragment | Arguments | Value"
 
     @classmethod
-    def make(cls, key: KeyTE, value: "Value | Fragment | Arguments"):
-        assert value is None or isinstance(value, (Value, Fragment, Arguments))
+    def make(cls, key: KeyTE, value: Any, prio: PrioT = 0, position: int = 0):
+        if not isinstance(value, (Value, Fragment, Arguments)):
+            value = Value(value, prio, position)
         if not isinstance(key, tuple):
             key = (key,)
         return cls._make(iter(key), value)
@@ -251,10 +252,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
     ):
         if callable(items := getattr(k2v, "items", None)):
             k2v = items()
-        return (
-            Fragment.make(k, v if isinstance(v, Value) else Value(v, prio))
-            for k, v in k2v
-        )
+        return (Fragment.make(k, v, prio) for k, v in k2v)
 
     @classmethod
     def from_list(cls, args: "list[Arguments | Fragment]") -> "Arguments":
@@ -846,7 +844,7 @@ class Expansion[T](BaseException):
     def expand(self, prio: PrioT = 0, **kwargs) -> Generator[ParaO, None, None]:
         key = self.make_key(**kwargs)
         for val in self.values:
-            res = self.make(Fragment.make(key, Value(val, prio)))
+            res = self.make(Fragment.make(key, val, prio))
             if isinstance(res, Expansion):
                 yield from res.expand(prio=prio, **kwargs)
             else:

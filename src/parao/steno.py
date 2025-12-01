@@ -1,7 +1,9 @@
 from collections import defaultdict
 
-from .core import Fragment, KeyTE, ParaO, _Param, get_inner_parao
+from .core import Fragment, KeyTE, ParaO, Value, _Param, get_inner_parao
 from .misc import ewarn
+
+_MARK = Value(object())
 
 
 def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
@@ -16,7 +18,7 @@ def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
             s.append(frag)
 
         if (param := op.got(frag.param)) and frag.is_type_ok(cls):
-            if frag.inner is None:
+            if frag.inner is _MARK:
                 yield instance, param
             else:
                 sub[param].append(frag.inner)
@@ -28,7 +30,7 @@ def _match_recusive(instance: ParaO, fragments: tuple[Fragment]):
 
 
 def find_value(self: ParaO, key: KeyTE):
-    frag = Fragment.make(key, None)
+    frag = Fragment.make(key, _MARK)
     cand = _match_recusive(self, (frag,))
 
     try:

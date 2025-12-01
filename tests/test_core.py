@@ -52,6 +52,7 @@ def test_Value():
 def test_Fragment():
     key = ("foo", "bar")
     f = Fragment.make(key, Value(uniq_object))
+    assert f == Fragment.make(key, uniq_object)
     assert f.param == key[0]
     assert f.types is None
     assert isinstance(f.inner, Fragment)
@@ -60,8 +61,11 @@ def test_Fragment():
     assert i.types is None
     assert isinstance(i.inner, Value)
 
+    vargs = (uniq_object, 1, 2)
+    assert Fragment.make(("key",), *vargs).inner == Value(*vargs)
+
     assert (
-        repr(Fragment.make(key, Value(None)))
+        repr(Fragment.make(key, None))
         == "Fragment('foo', None, Fragment('bar', None, Value(None)))"
     )
 
@@ -73,8 +77,8 @@ def test_Arguments():
     assert (
         Arguments(
             [
-                Fragment.make(("foo",), Value(uniq_object, 123)),
-                Fragment.make(("foo", "bar"), Value(uniq_object, 123)),
+                Fragment.make(("foo",), uniq_object, 123),
+                Fragment.make(("foo", "bar"), uniq_object, 123),
             ]
         )
         == Arguments.from_dict(
@@ -93,9 +97,9 @@ def test_Arguments():
     assert Arguments.from_dict({}) is Arguments.EMPTY
     assert Arguments.from_list([]) is Arguments.EMPTY
     assert Arguments.from_list([a := Arguments()]) is a
-    assert Arguments.from_list(
-        [Fragment.make(("foo",), Value(uniq_object))]
-    ) == Arguments([Fragment.make(("foo",), Value(uniq_object))])
+    assert Arguments.from_list([Fragment.make(("foo",), uniq_object)]) == Arguments(
+        [Fragment.make(("foo",), uniq_object)]
+    )
 
     with pytest.raises(TypeError):
         Arguments(123)
@@ -111,20 +115,20 @@ def test_Arguments():
 
     args = Arguments(
         [
-            Fragment.make(("foo",), Value(uniq_object, 1)),
-            Fragment.make(("foo", "bar"), Value(uniq_object, 2)),
+            Fragment.make(("foo",), uniq_object, 1),
+            Fragment.make(("foo", "bar"), uniq_object, 2),
             Fragment.make(
                 ("boo",),
                 Arguments(
                     [
-                        Fragment.make(("sub",), Value(uniq_object, 3)),
-                        Fragment.make(("sub", "bar"), Value(uniq_object, 4)),
+                        Fragment.make(("sub",), uniq_object, 3),
+                        Fragment.make(("sub", "bar"), uniq_object, 4),
                     ]
                 ),
             ),
             Arguments(
                 [
-                    Fragment.make(("nest",), Value(uniq_object, 5)),
+                    Fragment.make(("nest",), uniq_object, 5),
                 ]
             ),
         ]

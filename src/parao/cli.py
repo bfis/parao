@@ -415,7 +415,7 @@ class CLI:
                         prio = 1 - start.count("-") + start.count("+")
 
                     raw.append(arg)
-                    curr.append(Fragment.make(key, Value(value, prio, next(pos))))
+                    curr.append(Fragment.make(key, value, prio, next(pos)))
                 else:
                     if typ0 is not None:
                         raise ValueUnexpected(arg)
