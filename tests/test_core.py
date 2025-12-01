@@ -8,6 +8,7 @@ import pytest
 
 from parao.core import (
     UNSET,
+    Args,
     Arguments,
     Const,
     DuplicateParameter,
@@ -112,6 +113,16 @@ def test_Arguments():
         repr(Arguments.make(foo=123, bar=456))
         == "Arguments(Fragment('foo', None, Value(123)), Fragment('bar', None, Value(456)))"
     )
+
+    sub = Args(bar=uniq_object, boo=None)
+    assert Fragment.make(("foo",), sub).inner == (
+        Fragment.make(("bar",), uniq_object),
+        Fragment.make(("boo",), None),
+    )
+    assert Arguments.make(foo=sub) == (Fragment.make(("foo",), sub),)
+
+    f = Fragment.make(("foo",), Args(bar=uniq_object).with_prio(123))
+    assert f.inner[0].inner.prio == 123
 
     args = Arguments(
         [

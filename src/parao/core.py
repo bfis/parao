@@ -14,7 +14,7 @@ from .cast import Opaque, cast
 from .misc import ContextValue, TypedAlias, TypedAliasRedefined, ewarn, safe_len
 from .shash import _SHash, bin_hash
 
-__all__ = ["UNSET", "ParaO", "Param", "Prop", "Const"]
+__all__ = ["UNSET", "ParaO", "Param", "Prop", "Const", "Args"]
 
 
 class Unset(Opaque):
@@ -82,7 +82,9 @@ class Fragment:
 
     @classmethod
     def make(cls, key: KeyTE, value: Any, prio: PrioT = 0, position: int = 0):
-        if not isinstance(value, (Value, Fragment, Arguments)):
+        if isinstance(value, Args):
+            value = Arguments.from_dict(value, getattr(value, "prio", prio))
+        elif not isinstance(value, (Value, Fragment, Arguments)):
             value = Value(value, prio, position)
         if not isinstance(key, tuple):
             key = (key,)
@@ -199,6 +201,17 @@ class Solutions(dict["_Param", list["Arguments | Fragment"]]):
         return ret
 
 
+class Args(dict):
+    "A dict subclass that will be interpreted as individual arguments."
+
+    __slots__ = ("prio",)
+    prio: PrioT
+
+    def with_prio(self, prio: PrioT) -> Self:
+        self.prio = prio
+        return self
+
+
 class Arguments(tuple["Arguments | Fragment", ...]):
     __slots__ = ()
 
@@ -239,7 +252,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         cls,
         k2v: Mapping[KeyTE, Any] | Iterable[tuple[KeyTE, Any]],
         prio: PrioT = 0,
-    ):
+    ) -> "Arguments":
         if ret := cls(cls._from_dict(k2v, prio)):
             return ret
         return Arguments.EMPTY
