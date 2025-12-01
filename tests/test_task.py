@@ -205,11 +205,12 @@ def test_output_other_temp(tmpdir4BaseTask):
     with patch.object(TaskX.run, "func") as mock:
         TaskX.run.func.__annotations__ = {"return": Dir}
 
+        other_fs = os.environ.get(
+            "TEMP2_ON_DIFFERENT_FS", os.environ.get("XDG_RUNTIME_DIR", None)
+        )
         if (
-            other_fs := os.environ.get(
-                "TEMP2_ON_DIFFERENT_FS", os.environ.get("XDG_RUNTIME_DIR", None)
-            )
-        ) and os.stat(tmpdir4BaseTask).st_dev != os.stat(other_fs):  # pragma: no branch
+            other_fs and os.stat(tmpdir4BaseTask).st_dev != os.stat(other_fs).st_dev
+        ):  # pragma: no branch
             mock.return_value = Dir.temp(dir=other_fs)
             with (
                 pytest.warns(MoveAcrossFilesystem, match="slow"),
