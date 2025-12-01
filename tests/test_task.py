@@ -16,7 +16,7 @@ import pytest
 
 from parao.action import ValueAction
 from parao.cli import CLI
-from parao.core import Arguments, Const, OwnParameters, Param, ParaO
+from parao.core import Const, Fragments, OwnParameters, Param, ParaO
 from parao.output import (
     JSON,
     Coder,
@@ -61,7 +61,7 @@ class Task2(BaseTask):
 
 @pytest.fixture
 def tmpdir4BaseTask(tmpdir):
-    with Arguments.context(Arguments.make({(FancyTemplate, "dir_base"): tmpdir})):
+    with Fragments.context(Fragments.make({(FancyTemplate, "dir_base"): tmpdir})):
         yield tmpdir
 
 

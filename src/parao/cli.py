@@ -15,10 +15,10 @@ from typing import Any
 from .action import Plan
 from .cast import CastError, cast
 from .core import (
-    Arguments,
     Expansion,
     Fragment,
-    HasArguments,
+    Fragments,
+    HasFragments,
     KeyTE,
     ParaO,
     ParaOMeta,
@@ -221,8 +221,8 @@ class CLI:
 
     def __init__(
         self,
-        *args: Arguments
-        | HasArguments
+        *args: Fragments
+        | HasFragments
         | dict[KeyTE, Any]
         | Collection[str | tuple[KeyTE, Any]],
         entry_points: Iterable[ParaOMeta] | None = None,
@@ -240,8 +240,8 @@ class CLI:
             seen.add(curr)
 
         self._paraos = seen
-        self._args = Arguments.EMPTY
-        self._args = Arguments._make(args, parser=self.make_args)
+        self._args = Fragments.EMPTY
+        self._args = Fragments._make(args, parser=self.make_args)
 
     @cached_property
     def find_parao(self):
@@ -350,7 +350,7 @@ class CLI:
     ):
         pos = count(position0)
         pre: list[str] = []
-        got: list[tuple[ParaOMeta, Arguments, list[str]]] = []
+        got: list[tuple[ParaOMeta, Fragments, list[str]]] = []
 
         typ: type = typ0
         raw: list[str] = None if typ0 is None else []
@@ -420,7 +420,7 @@ class CLI:
                     if typ0 is not None:
                         raise ValueUnexpected(arg)
                     if typ is not None:
-                        got.append((typ, Arguments.from_list(curr), raw))
+                        got.append((typ, Fragments.from_list(curr), raw))
                     # solve typ
                     typ = self.parse_typ(body)
                     if not typ:
@@ -433,29 +433,29 @@ class CLI:
                 break
 
         if typ is not None:
-            got.append((typ, Arguments.from_list(curr), raw))
+            got.append((typ, Fragments.from_list(curr), raw))
 
         return pre, got, list(pit)
 
     def make_args(self, args: list[str]):
         pre, got, post = self.parse_args(args, typ0=object)
         assert not pre and not post
-        return got[0][1] if got else Arguments.EMPTY
+        return got[0][1] if got else Fragments.EMPTY
 
-    def _consume(self, typ: ParaOMeta, args: Arguments, raw: list[str] = ()):
+    def _consume(self, typ: ParaOMeta, frags: Fragments, raw: list[str] = ()):
         try:
-            yield from Expansion.generate(typ, args)
+            yield from Expansion.generate(typ, frags)
         except Exception as exc:
             exc.add_note(f"for arguments: {' '.join(raw)}")
             raise
         finally:
-            if unused := {f: v in Value.seen for f, v in args.enumerate(used=False)}:
+            if unused := {f: v in Value.seen for f, v in frags.enumerate(used=False)}:
                 for warning, val in [
                     (UnmatchedArguments, False),
                     (UnusedArguments, True),
                 ]:
                     if names := [
-                        r for arg, r in zip(args, raw[1:]) if unused.get(arg) is val
+                        r for frag, r in zip(frags, raw[1:]) if unused.get(frag) is val
                     ]:
                         ewarn(" ".join(names), warning)
 

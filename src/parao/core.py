@@ -78,13 +78,13 @@ class Value[T: Any]:
 class Fragment:
     param: "str | _Param | None"
     types: tuple[type] | None
-    inner: "Fragment | Arguments | Value"
+    inner: "Fragment | Fragments | Value"
 
     @classmethod
     def make(cls, key: KeyTE, value: Any, prio: PrioT = 0, position: int = 0):
         if isinstance(value, Args):
-            value = Arguments.from_dict(value, getattr(value, "prio", prio))
-        elif not isinstance(value, (Value, Fragment, Arguments)):
+            value = Fragments.from_dict(value, getattr(value, "prio", prio))
+        elif not isinstance(value, (Value, Fragment, Fragments)):
             value = Value(value, prio, position)
         if not isinstance(key, tuple):
             key = (key,)
@@ -92,7 +92,7 @@ class Fragment:
 
     @classmethod
     def _make(
-        cls, it: Iterator[KeyE], value: "Value | Fragment | Arguments"
+        cls, it: Iterator[KeyE], value: "Value | Fragment | Fragments"
     ) -> "Fragment":
         types = []
         for k in it:
@@ -124,24 +124,24 @@ class Fragment:
 
 
 @lru_cache
-class Solutions(dict["_Param", list["Arguments | Fragment"]]):
+class Solutions(dict["_Param", list["Fragments | Fragment"]]):
     __slots__ = ("_com", "_gat", "_val")
-    _com: "Arguments"  # a list during __init__
-    _gat: "Arguments"  # a list during __init__
+    _com: "Fragments"  # a list during __init__
+    _gat: "Fragments"  # a list during __init__
 
-    def __call__(self, key: "_Param") -> tuple["Arguments", Value | None]:
+    def __call__(self, key: "_Param") -> tuple["Fragments", Value | None]:
         if su := self.get(key):  # could use .pop
-            su = Arguments.from_list(su)
+            su = Fragments.from_list(su)
         else:
             su = self._gat if key.gatekeeper else self._com
         if va := self._val.get(key):
             Value.used.add(va)
         return su, va
 
-    def __init__(self, args: "Arguments", ref: "ParaOMeta"):
+    def __init__(self, frags: "Fragments", ref: "ParaOMeta"):
         super().__init__()
-        com: list[Arguments | Fragment]
-        gat: list[Arguments | Fragment]
+        com: list[Fragments | Fragment]
+        gat: list[Fragments | Fragment]
         val: dict[_Param, Value]
         self._com = com = []
         self._gat = gat = []
@@ -149,9 +149,9 @@ class Solutions(dict["_Param", list["Arguments | Fragment"]]):
         div: bool = False  # com & gat diverged
 
         op = ref.__own_parameters__
-        for arg in args:
-            if isinstance(arg, Arguments):
-                oth = Solutions(arg, ref)
+        for frag in frags:
+            if isinstance(frag, Fragments):
+                oth = Solutions(frag, ref)
                 for k, v in oth._val.items():
                     val[k] = val.get(k) | v
                 if len(ga := oth._gat) < len(co := oth._com):
@@ -167,35 +167,35 @@ class Solutions(dict["_Param", list["Arguments | Fragment"]]):
                     com.append(co)
                 if ga:
                     gat.append(ga)
-            elif (k := op.got(arg.param)) and arg.is_type_ok(ref):
-                if arg.types:
-                    com.append(arg)
-                    gat.append(arg)
+            elif (k := op.got(frag.param)) and frag.is_type_ok(ref):
+                if frag.types:
+                    com.append(frag)
+                    gat.append(frag)
                     for vs in self.values():
-                        vs.append(arg)
-                if isinstance((v := arg.inner), Value):
+                        vs.append(frag)
+                if isinstance((v := frag.inner), Value):
                     Value.seen.add(v)
                     val[k] = val.get(k) | v
                 else:
                     self[k].append(v)
             else:
-                com.append(arg)
-                if typd := bool(arg.types):
-                    gat.append(arg)
+                com.append(frag)
+                if typd := bool(frag.types):
+                    gat.append(frag)
                 for k, vs in self.items():
                     if typd or not k.gatekeeper:
-                        vs.append(arg)
+                        vs.append(frag)
 
         if self or val:
-            self._com = Arguments.from_list(com)
+            self._com = Fragments.from_list(com)
         else:
-            self._com = args
+            self._com = frags
         if div or len(gat) < len(com):
-            self._gat = Arguments.from_list(gat)
+            self._gat = Fragments.from_list(gat)
         else:
-            self._gat = args
+            self._gat = frags
 
-    def __missing__(self, key: "_Param") -> list["Arguments | Fragment"]:
+    def __missing__(self, key: "_Param") -> list["Fragments | Fragment"]:
         src = self._gat if key.gatekeeper else self._com
         self[key] = ret = src.copy()
         return ret
@@ -212,26 +212,26 @@ class Args(dict):
         return self
 
 
-class Arguments(tuple["Arguments | Fragment", ...]):
+class Fragments(tuple["Fragments | Fragment", ...]):
     __slots__ = ()
 
     @classmethod
-    def make(cls, *args: "Arguments | HasArguments | dict[KeyTE, Any]", **kwargs: Any):
+    def make(cls, *args: "Fragments | HasFragments | dict[KeyTE, Any]", **kwargs: Any):
         return cls._make(args, kwargs)
 
     @classmethod
     def _make[P](
         cls,
-        args: "Iterable[Arguments | HasArguments | dict[KeyTE, Any] | P]",
+        args: "Iterable[Fragments | HasFragments | dict[KeyTE, Any] | P]",
         kwargs: dict[str, Any] = None,
-        parser: Callable[[P], "Iterable[Fragment | Arguments] | None"] | None = None,
+        parser: Callable[[P], "Iterable[Fragment | Fragments] | None"] | None = None,
     ):
         sub = []
         if arg := cls.context():
             sub.append(arg)
 
         for arg in args:
-            arg = getattr(arg, "__args__", arg)
+            arg = getattr(arg, "__fragments__", arg)
             if isinstance(arg, cls):
                 if arg:
                     sub.append(arg)
@@ -252,10 +252,10 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         cls,
         k2v: Mapping[KeyTE, Any] | Iterable[tuple[KeyTE, Any]],
         prio: PrioT = 0,
-    ) -> "Arguments":
+    ) -> "Fragments":
         if ret := cls(cls._from_dict(k2v, prio)):
             return ret
-        return Arguments.EMPTY
+        return Fragments.EMPTY
 
     @classmethod
     def _from_dict(
@@ -268,50 +268,50 @@ class Arguments(tuple["Arguments | Fragment", ...]):
         return (Fragment.make(k, v, prio) for k, v in k2v)
 
     @classmethod
-    def from_list(cls, args: "list[Arguments | Fragment]") -> "Arguments":
-        """Turn an iterable into arguments. Avoids unnecessary nesting or repeated creation of empty Arguments."""
-        match args:
+    def from_list(cls, frags: "list[Fragments | Fragment]") -> "Fragments":
+        """Turn an iterable into arguments. Avoids unnecessary nesting or repeated creation of empty Fragments."""
+        match frags:
             case []:
                 return cls.EMPTY
-            case [Arguments()]:
-                return args[0]
-        return cls(args)
+            case [Fragments()]:
+                return frags[0]
+        return cls(frags)
 
     def __repr__(self):
         return self.__class__.__name__ + (tuple.__repr__(self) if self else "()")
 
-    def solve_value(self, param, owner, name) -> tuple["Arguments", "Value | None"]:
+    def solve_value(self, param, owner, name) -> tuple["Fragments", "Value | None"]:
         return Solutions(self, owner)(param)
 
     @lru_cache
     def solve_class(
         self, ref: "ParaOMeta"
-    ) -> "tuple[Arguments, Value[ParaOMeta] | None]":
+    ) -> "tuple[Fragments, Value[ParaOMeta] | None]":
         sub = []
         res = res0 = Value(ref, -inf)
         tar = {None, "__class__"}
         alt = False  # sub != self
 
-        for arg in self:
-            if isinstance(arg, Arguments):
-                s, r = arg.solve_class(res.val)
+        for frag in self:
+            if isinstance(frag, Fragments):
+                s, r = frag.solve_class(res.val)
                 if s:
                     sub.append(s)
-                    alt = alt or s is not arg
+                    alt = alt or s is not frag
                 if r is None:
                     continue
             elif (
-                arg.param in tar
-                and isinstance((r := arg.inner), Value)
-                and arg.is_type_ok(res.val)
+                frag.param in tar
+                and isinstance((r := frag.inner), Value)
+                and frag.is_type_ok(res.val)
             ):
                 Value.seen.add(r)
-                if arg.param:
+                if frag.param:
                     alt = True
                 else:
-                    sub.append(arg)
+                    sub.append(frag)
             else:
-                sub.append(arg)
+                sub.append(frag)
                 continue
             res |= r
             if res.val is UNSET:
@@ -328,7 +328,7 @@ class Arguments(tuple["Arguments | Fragment", ...]):
                 curr = curr.inner
             if curr is seek:
                 return root
-            elif isinstance(curr, Arguments):
+            elif isinstance(curr, Fragments):
                 if sub := curr.get_root_of(seek):
                     return sub
 
@@ -344,35 +344,35 @@ class Arguments(tuple["Arguments | Fragment", ...]):
 
         while stack:
             it, path = stack[-1]
-            for arg0 in it:
-                arg = arg0
-                while isinstance(arg, Fragment):
-                    arg = arg.inner
-                arg0: Fragment
-                if isinstance(arg, Arguments):
-                    if nested and arg not in done:
-                        if arg is not arg0:
-                            path += (arg0,)
-                        it = iter(arg)
-                        done.add(arg)
+            for frag0 in it:
+                frag = frag0
+                while isinstance(frag, Fragment):
+                    frag = frag.inner
+                frag0: Fragment
+                if isinstance(frag, Fragments):
+                    if nested and frag not in done:
+                        if frag is not frag0:
+                            path += (frag0,)
+                        it = iter(frag)
+                        done.add(frag)
                         stack.append((it, path))
                         break
-                elif (used is None or used == (arg in Value.used)) and (
-                    seen is None or seen == (arg in Value.seen)
+                elif (used is None or used == (frag in Value.used)) and (
+                    seen is None or seen == (frag in Value.seen)
                 ):
-                    yield path + ((arg,) if arg is arg0 else (arg0, arg))
+                    yield path + ((frag,) if frag is frag0 else (frag0, frag))
             else:
                 stack.pop()
 
-    EMPTY: "Arguments"
+    EMPTY: "Fragments"
 
 
-Arguments.EMPTY = Arguments()
-Arguments.context = ContextValue("ContextArguments", default=Arguments.EMPTY)
+Fragments.EMPTY = Fragments()
+Fragments.context = ContextValue("ContextFragments", default=Fragments.EMPTY)
 
 
-class HasArguments(Protocol):
-    __args__: Arguments
+class HasFragments(Protocol):
+    __fragments__: Fragments
 
 
 eager = ContextValue[bool]("eager", default=False)
@@ -439,12 +439,12 @@ class ParaOMeta(ABCMeta):
         return cls(value)
 
     def __call__(
-        cls, *args: Arguments | HasArguments | dict[KeyTE, Any], **kwargs: Any
+        cls, *args: Fragments | HasFragments | dict[KeyTE, Any], **kwargs: Any
     ) -> Self:
-        arg = Arguments._make(args, kwargs)
-        arg, val = arg.solve_class(cls)
+        frags = Fragments._make(args, kwargs)
+        frags, val = frags.solve_class(cls)
         ret = cls.__new__(cls if val is None else val.val)
-        ret.__args__ = arg
+        ret.__fragments__ = frags
         ret.__init__()
         if eager():
             for name, param in ret.__class__.__own_parameters__.items():
@@ -476,7 +476,7 @@ def get_inner_parao(value: Any):
 
 
 class ParaO(metaclass=ParaOMeta):
-    __args__: Arguments  # | UNSET
+    __fragments__: Fragments
 
     def __shash__(self, enc: _SHash) -> bytes:
         try:
@@ -649,17 +649,17 @@ class _Param[T]:
         val: Value | None,
         name: str,
         instance: "ParaO",
-        *args: Arguments | Fragment,
+        *frags: Fragments | Fragment,
     ):
         if val and val.prio < self.min_prio:
             val = None
 
         try:
-            with Arguments.context(Arguments.from_list(args)):
+            with Fragments.context(Fragments.from_list(frags)):
                 return self._get(val, name, instance)
         except Expansion as exp:
             exp.process(self, instance, val)
-            exp.make = partial(self._solve, val, name, instance, *args)
+            exp.make = partial(self._solve, val, name, instance, *frags)
             return exp
         except Exception as exc:
             exc.add_note(
@@ -680,7 +680,7 @@ class _Param[T]:
         cls = type(instance)
         name = self._name(cls)
 
-        sub, val = instance.__args__.solve_value(self, cls, name)
+        sub, val = instance.__fragments__.solve_value(self, cls, name)
 
         instance.__dict__[name] = raw = self._solve(val, name, instance, sub)
         return raw
@@ -800,7 +800,7 @@ class Expansion[T](BaseException):
             return  # this will add ._get
         # keep track of key to dial-down to the origin
         self._frames.append(
-            (inst.__class__, param, inst.__args__.get_root_of(self.value))
+            (inst.__class__, param, inst.__fragments__.get_root_of(self.value))
         )
         raise  # self # but don't to avoid mangling the traceback # noqa: PLE0704
 
@@ -865,13 +865,13 @@ class Expansion[T](BaseException):
 
     @staticmethod
     def generate(
-        typ: ParaOMeta, args: Arguments, **kwargs
+        typ: ParaOMeta, frags: Fragments, **kwargs
     ) -> Generator[ParaO, None, None]:
         with eager(True):
             try:
-                yield typ(args)
+                yield typ(frags)
             except Expansion as exp:
-                exp.make = lambda arg: typ(Arguments((args, arg)))
+                exp.make = lambda frag: typ(Fragments((frags, frag)))
                 try:
                     yield from exp.expand(**kwargs)
                 except Exception as exc:

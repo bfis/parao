@@ -9,12 +9,12 @@ import pytest
 from parao.core import (
     UNSET,
     Args,
-    Arguments,
     Const,
     DuplicateParameter,
     Expansion,
     ExpansionGeneratedKeyMissingParameter,
     Fragment,
+    Fragments,
     MissingParameterValue,
     OwnParameters,
     Param,
@@ -71,22 +71,22 @@ def test_Fragment():
     )
 
 
-def test_Arguments():
+def test_Fragments():
     tpl = (1, "foo", uniq_object)  # the are actually bad types ...
-    assert Arguments(tpl) == tpl
+    assert Fragments(tpl) == tpl
 
     assert (
-        Arguments(
+        Fragments(
             [
                 Fragment.make(("foo",), uniq_object, 123),
                 Fragment.make(("foo", "bar"), uniq_object, 123),
             ]
         )
-        == Arguments.from_dict(
+        == Fragments.from_dict(
             {"foo": uniq_object, ("foo", "bar"): uniq_object},
             prio=123,
         )
-        == Arguments.from_dict(
+        == Fragments.from_dict(
             [
                 ("foo", uniq_object),
                 (("foo", "bar"), uniq_object),
@@ -95,23 +95,23 @@ def test_Arguments():
         )
     )
 
-    assert Arguments.from_dict({}) is Arguments.EMPTY
-    assert Arguments.from_list([]) is Arguments.EMPTY
-    assert Arguments.from_list([a := Arguments()]) is a
-    assert Arguments.from_list([Fragment.make(("foo",), uniq_object)]) == Arguments(
+    assert Fragments.from_dict({}) is Fragments.EMPTY
+    assert Fragments.from_list([]) is Fragments.EMPTY
+    assert Fragments.from_list([a := Fragments()]) is a
+    assert Fragments.from_list([Fragment.make(("foo",), uniq_object)]) == Fragments(
         [Fragment.make(("foo",), uniq_object)]
     )
 
     with pytest.raises(TypeError):
-        Arguments(123)
+        Fragments(123)
 
-    assert repr(Arguments.make({})) == "Arguments()"
+    assert repr(Fragments.make({})) == "Fragments()"
     assert (
-        repr(Arguments.make(key=123)) == "Arguments(Fragment('key', None, Value(123)),)"
+        repr(Fragments.make(key=123)) == "Fragments(Fragment('key', None, Value(123)),)"
     )
     assert (
-        repr(Arguments.make(foo=123, bar=456))
-        == "Arguments(Fragment('foo', None, Value(123)), Fragment('bar', None, Value(456)))"
+        repr(Fragments.make(foo=123, bar=456))
+        == "Fragments(Fragment('foo', None, Value(123)), Fragment('bar', None, Value(456)))"
     )
 
     sub = Args(bar=uniq_object, boo=None)
@@ -119,41 +119,41 @@ def test_Arguments():
         Fragment.make(("bar",), uniq_object),
         Fragment.make(("boo",), None),
     )
-    assert Arguments.make(foo=sub) == (Fragment.make(("foo",), sub),)
+    assert Fragments.make(foo=sub) == (Fragment.make(("foo",), sub),)
 
-    f = Fragment.make(("foo",), Args(bar=uniq_object).with_prio(123))
-    assert f.inner[0].inner.prio == 123
+    frag = Fragment.make(("foo",), Args(bar=uniq_object).with_prio(123))
+    assert frag.inner[0].inner.prio == 123
 
-    args = Arguments(
+    frags = Fragments(
         [
             Fragment.make(("foo",), uniq_object, 1),
             Fragment.make(("foo", "bar"), uniq_object, 2),
             Fragment.make(
                 ("boo",),
-                Arguments(
+                Fragments(
                     [
                         Fragment.make(("sub",), uniq_object, 3),
                         Fragment.make(("sub", "bar"), uniq_object, 4),
                     ]
                 ),
             ),
-            Arguments(
+            Fragments(
                 [
                     Fragment.make(("nest",), uniq_object, 5),
                 ]
             ),
         ]
     )
-    assert list(args.enumerate(nested=False)) == [
-        (args[0], args[0].inner),
-        (args[1], args[1].inner.inner),
+    assert list(frags.enumerate(nested=False)) == [
+        (frags[0], frags[0].inner),
+        (frags[1], frags[1].inner.inner),
     ]
-    assert list(args.enumerate(nested=True)) == [
-        (args[0], args[0].inner),
-        (args[1], args[1].inner.inner),
-        (args[2], args[2].inner[0], args[2].inner[0].inner),
-        (args[2], args[2].inner[1], args[2].inner[1].inner.inner),
-        (args[3][0], args[3][0].inner),
+    assert list(frags.enumerate(nested=True)) == [
+        (frags[0], frags[0].inner),
+        (frags[1], frags[1].inner.inner),
+        (frags[2], frags[2].inner[0], frags[2].inner[0].inner),
+        (frags[2], frags[2].inner[1], frags[2].inner[1].inner.inner),
+        (frags[3][0], frags[3][0].inner),
     ]
 
 
@@ -237,11 +237,11 @@ class TestParaO(TestCase):
         # cover some rare branches
         self.assertIsInstance(
             ParaO(
-                Arguments(
+                Fragments(
                     (
-                        Arguments.from_dict({ParaO: UNSET}),
-                        Arguments.EMPTY,
-                        Arguments.from_dict({ParaO: Sub}),
+                        Fragments.from_dict({ParaO: UNSET}),
+                        Fragments.EMPTY,
+                        Fragments.from_dict({ParaO: Sub}),
                     )
                 )
             ),
@@ -340,9 +340,9 @@ class TestParaO(TestCase):
         # providing a dict
         self.assertEqual(Wrap(one=dict(foo=123)).one.foo, 123)
 
-        # unsing instance's args
+        # unsing instance's Fragments
         self.assertEqual(Wrap(one=Sub2(foo=123)).one.foo, 123)
-        self.assertEqual(Wrap(one=Sub2(foo=123).__args__).one.foo, 123)
+        self.assertEqual(Wrap(one=Sub2(foo=123).__fragments__).one.foo, 123)
 
         # direct instance providing
         self.assertEqual(Wrap(one=Sub(foo=123)).one.foo, 123)
@@ -360,7 +360,7 @@ class TestParaO(TestCase):
         self.assertEqual(
             Wrap(
                 {("one", "bar"): "boo"},
-                Arguments.make({(Sub, "foo"): 2}),
+                Fragments.make({(Sub, "foo"): 2}),
             ).one.foo,
             2,
         )
@@ -398,7 +398,7 @@ class TestParaO(TestCase):
         self.assertRaises(MissingParameterValue, lambda: w.gated.foo)
         self.assertEqual(w.gated.bar, None)
 
-        w2 = Wrap(gated=Arguments.make(foo=321), foo=123)
+        w2 = Wrap(gated=Fragments.make(foo=321), foo=123)
         self.assertEqual(w2.main.foo, 123)
         self.assertEqual(w2.gated.foo, 321)
 
@@ -446,7 +446,7 @@ class TestParaO(TestCase):
         with eager(True):
             self.assertRaises(Expansion, lambda: Foo(bar=[1, 2, 3]))
             try:
-                Foo(Arguments.from_dict({"unused": 1}), bar=[1, 2, 3])
+                Foo(Fragments.from_dict({"unused": 1}), bar=[1, 2, 3])
             except Expansion as exp:
                 self.assertEqual(exp.param, Foo.bar)
                 self.assertEqual(exp.param_name, "bar")
