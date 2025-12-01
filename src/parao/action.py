@@ -153,6 +153,13 @@ class ValueAction[T, R](_Action[T, R, [T]]):
 class RecursiveAct[R, A: _RecursiveAction, I: ParaO](_Act[int | bool | None, R, A, I]):
     __slots__ = ()
 
+    @property
+    def trigger(self):
+        return super().trigger and not self._skip(self.value)
+
+    def _skip(self, val: int | bool | None):
+        return val is False or val is None or val < 0
+
     def _inner(self):
         name = self.name
         is_peer = self.action.__class__._is_peer
@@ -173,16 +180,16 @@ class RecursiveAct[R, A: _RecursiveAction, I: ParaO](_Act[int | bool | None, R, 
             val = self.value
             if val is UNSET:
                 val = True if _outer is None else _outer
-            elif self.trigger:  # pragma: no branch
+            elif self.trigger:
                 Plan.consume(self)
         else:
             val = override
-        if val is False or val < 0:
+        if self._skip(val):
             return
 
         return self._func(
             self._inner() if val else (),  # recusion elements, if (still) allowed
-            _outer=val is True or val < 1 or val - 1,  # remaining recursion
+            _outer=val is True or val - 1,  # remaining recursion
             **kwargs,  # arbitrary other state, e.g. depth
         )
 

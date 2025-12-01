@@ -123,6 +123,10 @@ class TestAction(TestCase):
 
         with patch.object(FooBase.act, "func", mock):
             mock.reset_mock()
+            Plan.run1(Foo3(act=None))
+            self.assertEqual(mock.call_count, 0)
+
+            mock.reset_mock()
             mix4 = Plan.run1(FooMix({"act": 3, ("inner", "act"): True}))
             mock.assert_has_calls(
                 [
