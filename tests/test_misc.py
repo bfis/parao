@@ -29,8 +29,10 @@ class TestMisc(TestCase):
 
         self.assertIs(pi.peek(), tpl[0])
         self.assertIs(pi.peek(), tpl[0])
+        self.assertTrue(pi.more)
         self.assertEqual(tuple(pi), tpl)
         self.assertRaises(StopIteration, lambda: pi.peek())
+        self.assertFalse(pi.more)
         self.assertIs(pi.peek(o := object()), o)
 
     def test_is_subseq(self):

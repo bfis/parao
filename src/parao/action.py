@@ -15,7 +15,7 @@ from .core import (
     _DecoratorParam,
     get_inner_parao,
 )
-from .misc import ContextValue
+from .misc import ContextValue, PeekableIter
 
 __all__ = ["SimpleAction", "ValueAction", "RecursiveAction"]
 
@@ -168,10 +168,12 @@ class RecursiveAct[R, A: _RecursiveAction, I: ParaO](_Act[int | bool | None, R, 
                 if is_peer(other.__class__):
                     yield getattr(inner, name)
 
-    def _func(self, sub: Iterable[Self], depth: int = 0, **kwargs) -> R:
-        if not self.action.func(self.instance, depth):
-            for s in sub:
-                s(depth=depth + 1, **kwargs)
+    def _func(self, sub: Iterable[Self], depth: int = 0, more: int = 0, **kwargs) -> R:
+        if not self.action.func(self.instance, depth, more):
+            it = PeekableIter(sub)
+            more <<= 1
+            for s in it:
+                s(depth=depth + 1, more=more | it.more, **kwargs)
 
     def __call__(
         self, override: int | bool | None = None, *, _outer: int = None, **kwargs
@@ -220,7 +222,7 @@ class _RecursiveAction[R, **Ps](_Action[int | bool | None, R, Ps]):
 
 
 class RecursiveAction(_RecursiveAction[bool, [int]]):
-    func: Callable[[ParaO, int], bool]
+    func: Callable[[ParaO, int, int], bool]
 
 
 class Plan(list[_Act]):

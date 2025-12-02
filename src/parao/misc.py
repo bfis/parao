@@ -103,6 +103,15 @@ class PeekableIter[T]:
                     return default
         return self._head
 
+    @property
+    def more(self) -> bool:
+        if self._head is _sentinel:
+            try:
+                self._head = next(self._iter)
+            except StopIteration:
+                return False
+        return True
+
 
 def is_subseq(needles, haystack):
     haystack = iter(haystack)

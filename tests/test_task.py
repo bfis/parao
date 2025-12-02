@@ -4,7 +4,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import partial
-from io import IOBase
+from io import BytesIO, IOBase, StringIO, TextIOWrapper
 from pathlib import Path
 from stat import S_IMODE, S_IWGRP, S_IWOTH, S_IWUSR
 from tempfile import TemporaryDirectory
@@ -33,6 +33,7 @@ from parao.output import (
     RunAct,
     UntypedOuput,
 )
+from parao.print import PPrint, Wood
 from parao.run import ConcurrentRunner, PseudoOutput
 from parao.task import RunAction, Task, pprint
 
@@ -57,6 +58,23 @@ class Task2(BaseTask):
 
     def run(self) -> tuple:
         return 321, self.dep.run.output.load()
+
+
+class Task3(BaseTask):
+    dep1 = Param[Task1]()
+    dep2 = Param[Task2]()
+    dep3 = Param[Task1]()
+    dep4 = Param[Task2]()
+
+    def run(self): ...
+
+
+class Task4(BaseTask):
+    dep1 = Param[Task3]()
+    dep2 = Param[Task2]()
+    dep3 = Param[Task1]()
+
+    def run(self): ...
 
 
 @pytest.fixture
@@ -368,27 +386,36 @@ def test_print(capsys):
         assert cap.err == ""
         assert cap.out.split("\n") == [
             "tests.test_task:Task2(dep=tests.test_task:Task1())",
-            "  tests.test_task:Task1()",
+            "└─tests.test_task:Task1()",
             "",
         ]
+
+
+def test_pprint(tmpdir4BaseTask):
+    tio = TextIOWrapper(BytesIO(), encoding="ascii")
+    PPrint(stream=tio).pleaf(Task1(), 2, 2)
+    tio.seek(0)
+    assert tio.read() == "| +-tests.test_task:Task1()\n"
+
+    sio = StringIO()
+    PPrint(stream=sio, wood=Wood(*"12345", 3)).pleaf(Task1(), 2, 2)
+    assert sio.getvalue() == "155344tests.test_task:Task1()\n"
 
 
 def test_status(capsys, tmpdir4BaseTask):
     with patch.object(pprint, "_stream", sys.stdout):
         Task2().status()
-
         cap = capsys.readouterr()
         assert cap.err == ""
         assert cap.out.split("\n") == [
             "tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
-            "  tests.test_task:Task1(): missing",
+            "└─tests.test_task:Task1(): missing",
             "",
         ]
 
         filler = "~".join(map(str, range(50)))
 
         Task2({(Task, "space_waster"): filler}).status()
-
         cap = capsys.readouterr()
         assert cap.err == ""
         assert cap.out.split("\n") == [
@@ -396,9 +423,57 @@ def test_status(capsys, tmpdir4BaseTask):
             " dep=tests.test_task:Task1(...),",
             f" space_waster='{filler}'",
             "): missing",
-            "  tests.test_task:Task1(",
+            "└─tests.test_task:Task1(",
             f"   space_waster='{filler}'",
             "  ): missing",
+            "",
+        ]
+
+        # test some strange "wood" "grain"
+        with patch.object(pprint, "wood", Wood(*"12345", 3)):
+            Task3().status()
+        cap = capsys.readouterr()
+        assert cap.err == ""
+        assert cap.out.split("\n") == [
+            "tests.test_task:Task3(",
+            " dep1=tests.test_task:Task1(),",
+            " dep2=tests.test_task:Task2(dep=tests.test_task:Task1()),",
+            " dep3=tests.test_task:Task1(),",
+            " dep4=tests.test_task:Task2(dep=tests.test_task:Task1())",
+            "): missing",
+            "244tests.test_task:Task1(): missing",
+            "244tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
+            "155344tests.test_task:Task1(): missing",
+            "244tests.test_task:Task1(): missing",
+            "344tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
+            "555344tests.test_task:Task1(): missing",
+            "",
+        ]
+
+        Task4().status()
+        cap = capsys.readouterr()
+        assert cap.err == ""
+        assert cap.out.split("\n") == [
+            "tests.test_task:Task4(",
+            " dep1=tests.test_task:Task3(...),",
+            " dep2=tests.test_task:Task2(dep=tests.test_task:Task1()),",
+            " dep3=tests.test_task:Task1()",
+            "): missing",
+            "├─tests.test_task:Task3(",
+            "│  dep1=tests.test_task:Task1(),",
+            "│  dep2=tests.test_task:Task2(dep=tests.test_task:Task1()),",
+            "│  dep3=tests.test_task:Task1(),",
+            "│  dep4=tests.test_task:Task2(dep=tests.test_task:Task1())",
+            "│ ): missing",
+            "│ ├─tests.test_task:Task1(): missing",
+            "│ ├─tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
+            "│ │ └─tests.test_task:Task1(): missing",
+            "│ ├─tests.test_task:Task1(): missing",
+            "│ └─tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
+            "│   └─tests.test_task:Task1(): missing",
+            "├─tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
+            "│ └─tests.test_task:Task1(): missing",
+            "└─tests.test_task:Task1(): missing",
             "",
         ]
 
@@ -421,7 +496,7 @@ def test_remove(capsys, tmpdir4BaseTask):
         assert cap.err == ""
         assert cap.out.split("\n") == [
             "tests.test_task:Task2(dep=tests.test_task:Task1()): missing",
-            "  tests.test_task:Task1(): removed",
+            "└─tests.test_task:Task1(): removed",
             "",
         ]
 

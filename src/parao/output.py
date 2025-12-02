@@ -569,20 +569,20 @@ class Task[R](ParaO):
         return super().__init_subclass__()
 
     @RecursiveAction
-    def remove(self, depth: int):
+    def remove(self, depth: int, more: int):
         out = self.run.output
         if out.exists:
             out.remove()
             after = "removed"
         else:
             after = "missing"
-        pprint.pprint(self, indent=2 * depth, after=after)
+        pprint.pleaf(self, depth, more, after=after)
 
     @RecursiveAction
-    def status(self, depth: int):
+    def status(self, depth: int, more: int):
         after = "done" if self.run.done else "missing"
-        pprint.pprint(self, indent=2 * depth, after=after)
+        pprint.pleaf(self, depth, more, after=after)
 
     @RecursiveAction
-    def print(self, depth: int):
-        pprint.pprint(self, indent=2 * depth)
+    def print(self, depth: int, more: int):
+        pprint.pleaf(self, depth, more)

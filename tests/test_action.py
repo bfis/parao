@@ -130,10 +130,10 @@ class TestAction(TestCase):
             mix4 = Plan.run1(FooMix({"act": 3, ("inner", "act"): True}))
             mock.assert_has_calls(
                 [
-                    call(mix4, 0),
-                    call(mix4.inner[0], 1),
-                    call(mix4.inner[0].foo1, 2),
-                    call(mix4.inner[1], 1),
+                    call(mix4, 0, 0),
+                    call(mix4.inner[0], 1, 1),
+                    call(mix4.inner[0].foo1, 2, 2),
+                    call(mix4.inner[1], 1, 0),
                 ]
             )
             self.assertEqual(mock.call_count, 4)
@@ -150,12 +150,12 @@ class TestAction(TestCase):
             )
             mock.assert_has_calls(
                 [
-                    call(mix6, 0),
-                    call(mix6.inner[0], 1),
-                    call(mix6.inner[0].foo1, 2),
-                    call(mix6.inner[1], 1),
-                    call(mix6.inner[0], 0),
-                    call(mix6.inner[0].foo1, 1),
+                    call(mix6, 0, 0),
+                    call(mix6.inner[0], 1, 1),
+                    call(mix6.inner[0].foo1, 2, 2),
+                    call(mix6.inner[1], 1, 0),
+                    call(mix6.inner[0], 0, 0),
+                    call(mix6.inner[0].foo1, 1, 0),
                 ]
             )
             self.assertEqual(mock.call_count, 6)
@@ -163,42 +163,39 @@ class TestAction(TestCase):
             mock.reset_mock()
             mixB = Plan.run1(FooBad(act=True))
             mock.assert_has_calls(
-                [
-                    call(mixB, 0),
-                    call(mixB.bad, 1),
-                    call(mixB.bad.foo1, 2),
-                ]
+                [call(mixB, 0, 0), call(mixB.bad, 1, 0), call(mixB.bad.foo1, 2, 0)]
             )
             self.assertEqual(mock.call_count, 3)
 
+            mock.reset_mock()
             foo3 = Plan.run1(Foo3(act=True))
             mock.assert_has_calls(
-                [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
+                [call(foo3, 0, 0), call(foo3.foo2, 1, 0), call(foo3.foo2.foo1, 2, 0)]
             )
 
             mock.reset_mock()
             foo3.act(1)
-            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.assert_has_calls([call(foo3, 0, 0), call(foo3.foo2, 1, 0)])
 
             mock.reset_mock()
             (foo3 := Foo3()).act()
             mock.assert_has_calls(
-                [call(foo3, 0), call(foo3.foo2, 1), call(foo3.foo2.foo1, 2)]
+                [call(foo3, 0, 0), call(foo3.foo2, 1, 0), call(foo3.foo2.foo1, 2, 0)]
             )
 
             mock.reset_mock()
             (foo3 := Foo3({(Foo1, "act"): False})).act()
-            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.assert_has_calls([call(foo3, 0, 0), call(foo3.foo2, 1, 0)])
 
             mock.reset_mock()
             (foo3 := Foo3()).act(1)
-            mock.assert_has_calls([call(foo3, 0), call(foo3.foo2, 1)])
+            mock.assert_has_calls([call(foo3, 0, 0), call(foo3.foo2, 1, 0)])
 
             mock.reset_mock()
             (foo3 := Foo3()).act(0)
-            mock.assert_has_calls([call(foo3, 0)])
+            mock.assert_has_calls([call(foo3, 0, 0)])
 
             mock.reset_mock()
             mock.return_value = True
             (foo3 := Foo3()).act()
-            mock.assert_has_calls([call(foo3, 0)])
+            mock.assert_has_calls([call(foo3, 0, 0)])
