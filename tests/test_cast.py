@@ -1,7 +1,8 @@
+from collections.abc import Callable
 from typing import Annotated, Any
 from unittest import TestCase
 
-from parao.cast import cast
+from parao.cast import CastError, cast
 
 
 class TestCasting(TestCase):
@@ -48,6 +49,10 @@ class TestCasting(TestCase):
         self.assertEqual(cast("1.2", int | float), 1.2)
         self.assertRaises(TypeError, lambda: cast("foo", int | float))
         self.assertEqual(cast("123", Annotated[int, str]), 123)
+
+        self.assertIs(cast(f := lambda: None, Callable[..., None]), f)
+        self.assertIs(cast(f := lambda x: None, Callable[[None], None]), f)
+        self.assertRaises(CastError, lambda: cast(lambda: None, Callable[[None], None]))
 
         class Foo:
             @classmethod

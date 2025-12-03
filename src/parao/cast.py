@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from functools import lru_cache
+from inspect import signature
 from itertools import repeat
 from types import NoneType, UnionType
 from typing import Any, Protocol, Union, _AnnotatedAlias, get_args, get_origin
@@ -20,6 +23,17 @@ class Opaque:
 class Castable(Protocol):
     @classmethod
     def __cast_from__(cls, value, original_type): ...
+
+
+@lru_cache
+def sigcheck(func: Callable, args: tuple, ret) -> bool:
+    if args is ...:
+        return True
+    try:
+        signature(func).bind_partial(*args)
+    except TypeError:
+        return False
+    return True
 
 
 def cast(val: Any, typ: type) -> Any:
@@ -50,6 +64,18 @@ def cast(val: Any, typ: type) -> Any:
                 except (TypeError, ValueError) as exc:
                     err.add_note(str(exc))
             raise err
+
+        if ori is Callable:
+            if callable(val) and (
+                not args
+                or sigcheck(
+                    val,
+                    tuple(args[0]) if isinstance(args[0], list) else args[0],
+                    args[1],
+                )
+            ):
+                return val
+            raise CastError(val, typ)
 
         # container types
         if isinstance(ori, type):  # pragma: no branch
