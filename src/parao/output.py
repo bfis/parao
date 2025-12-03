@@ -8,6 +8,7 @@ from errno import EXDEV
 from functools import partial
 from io import FileIO
 from itertools import chain, islice, takewhile
+from math import tanh
 from pathlib import Path
 from shutil import copy2, copytree, rmtree
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -457,16 +458,24 @@ class FancyTemplate(PlainTemplate):
         return dirs
 
     small_join = Param[str]("_")
-    label_patt = Param[str]("{0}={1}")
+    label_patt = Param[Callable[[str, str], str] | str]("{0}={1}")
     small_mod = Param[int](1)
-    label_mod = Param[int](100)
+    label_mod = Param[int](0)
     default_pos = Param[float | None](None)
+    default_pos_grp = Param[float](0)
+
+    def _calc_pos(self, param: _Param) -> float:
+        grp = getattr(param, "grp", None)
+        if grp is None:
+            return getattr(param, "pos", self.default_pos)
+        return grp + tanh(getattr(param, "pos", self.default_pos_grp) * 1e-3)
 
     def _encode_parao(self, inst: ParaO, seen: set[ParaO]):
         seen.add(inst)
 
         cand: list[tuple[float, str, str | Iterable[ParaO]]] = []
         rest: list[Iterable[ParaO]] = []
+        lmod = self.label_mod
 
         for name, param in inst.__class__.__own_parameters__.items():
             if not param.significant:
@@ -477,28 +486,30 @@ class FancyTemplate(PlainTemplate):
             if nut is not UNSET and (val is nut or val == nut):
                 continue
 
-            if (pos := getattr(param, "pos", self.default_pos)) is None:
+            if (pos := self._calc_pos(param)) is None:
                 rest.append(get_inner_parao(val))
             else:
                 if (enc := self._encode_value(val)) is None:
                     enc = get_inner_parao(val)
-                cand.append((pos, name, enc))
+                label = getattr(param, "label", lmod and not pos % lmod)
+                cand.append((pos, name, label, enc))
 
         cand.sort()
-
         smod = self.small_mod
-        lmod = self.label_mod
+        lpat = self.label_patt
+        if isinstance(lpat, str):
+            lpat = lpat.format
 
         small = StrOpBuffer(self.small_join.join)
-        for pos, name, enc in cand:
+        for pos, name, label, enc in cand:
             if isinstance(enc, str):
+                if label:
+                    enc = lpat(name if label is True else label, enc)
                 if not smod or pos % smod:  # want small
                     small.append(enc)
                 else:
                     if small:
                         yield small.flush()
-                    if not (lmod and pos % lmod):  # want label
-                        enc = self.label_patt.format(name, enc)
                     yield enc
             else:
                 if small:

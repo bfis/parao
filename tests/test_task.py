@@ -558,17 +558,18 @@ class TaskR(Task):
 class TaskT(Task):
     def run(self) -> None: ...
 
-    labeled = Param[int](0, pos=0)
+    label1 = Param[float](0.1, pos=0, label=True)
+    label2 = Param[float](0.2, pos=0, label="LaBeL~2")
 
     small11 = Param[int](11, pos=1.1)
     small12 = Param[int](12, pos=1.2)
     small13 = Param[int](13, pos=1.3)
 
-    normal = Param[int](2, pos=2)
+    normal = Param[int](2, grp=2)
 
-    small21 = Param[int](21, pos=2.1)
-    small22 = Param[int](22, pos=2.2)
-    small23 = Param[int](23, pos=2.3)
+    small21 = Param[int](21, grp=2, pos=1)
+    small22 = Param[int](22, grp=2, pos=2)
+    small23 = Param[int](23, grp=2, pos=3)
 
     left = Param[TaskL](pos=5)
     right = Param[TaskR](pos=5)
@@ -593,7 +594,8 @@ def test_templating(tmpdir):
 
     assert probe(TaskT) == (
         "tests.test_task:TaskT",
-        "labeled=0",
+        "label1=0.1",
+        "LaBeL~2=0.2",
         "11_12_13",
         "2",
         "21_22_23",
@@ -601,27 +603,42 @@ def test_templating(tmpdir):
     assert probe(TaskT, tot_limit=0) == probe(TaskT)
     assert probe(TaskT, tot_limit=40) == (
         "tests.test_task:TaskT",
-        "labeled=0",
+        "label1=0.1",
+    )
+    assert probe(TaskT, tot_limit=40, label_patt="{1}<={0}".format) == (
+        "tests.test_task:TaskT",
+        "0.1<=label1",
+    )
+    assert probe(TaskT, label_mod=2) == (
+        "tests.test_task:TaskT",
+        "label1=0.1",
+        "LaBeL~2=0.2",
+        "11_12_13",
+        "normal=2",
+        "21_22_23",
     )
     assert probe(TaskT, class_name=False, module_name=False) == (
-        "labeled=0",
+        "label1=0.1",
+        "LaBeL~2=0.2",
         "11_12_13",
         "2",
         "21_22_23",
     )
     assert probe(TaskT, dir_limit=1) == ("tests.test_task:TaskT",)
     assert probe(TaskT, dir_limit=-1) == ()
-    assert probe(TaskT, name_limit=3, name_ellipsis="~") == (
-        "te~",
-        "la~",
-        "11~",
+    assert probe(TaskT, name_limit=3, name_ellipsis="+") == (
+        "te+",
+        "la+",
+        "La+",
+        "11+",
         "2",
-        "21~",
+        "21+",
     )
 
     assert probe(TaskT, {"in1": "foo"}, default_pos=1e3 + 0.1) == (
         "tests.test_task:TaskT",
-        "labeled=0",
+        "label1=0.1",
+        "LaBeL~2=0.2",
         "11_12_13",
         "2",
         "21_22_23",
