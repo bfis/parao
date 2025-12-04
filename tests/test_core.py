@@ -124,6 +124,8 @@ def test_Fragments():
     frag = Fragment.make(("foo",), Args(bar=uniq_object).with_prio(123))
     assert frag.inner[0].inner.prio == 123
 
+    assert Fragments.make(Args(foo=uniq_object).with_prio(123))[0].inner.prio == 123
+
     frags = Fragments(
         [
             Fragment.make(("foo",), uniq_object, 1),

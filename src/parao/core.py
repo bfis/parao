@@ -211,6 +211,10 @@ class Args(dict):
         self.prio = prio
         return self
 
+    @property
+    def __fragments__(self):
+        return Fragments.from_dict(self, getattr(self, "prio", 0))
+
 
 class Fragments(tuple["Fragments | Fragment", ...]):
     __slots__ = ()
