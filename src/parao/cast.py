@@ -30,7 +30,7 @@ def sigcheck(func: Callable, args: tuple, ret) -> bool:
     if args is ...:
         return True
     try:
-        signature(func).bind_partial(*args)
+        signature(func).bind(*args)
     except TypeError:
         return False
     return True

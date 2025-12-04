@@ -52,6 +52,7 @@ class TestCasting(TestCase):
 
         self.assertIs(cast(f := lambda: None, Callable[..., None]), f)
         self.assertIs(cast(f := lambda x: None, Callable[[None], None]), f)
+        self.assertRaises(CastError, lambda: cast(lambda x: None, Callable[[], None]))
         self.assertRaises(CastError, lambda: cast(lambda: None, Callable[[None], None]))
 
         class Foo:
