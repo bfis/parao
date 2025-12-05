@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import lru_cache
 from inspect import signature
 from itertools import repeat
+from numbers import Number
 from types import NoneType, UnionType
 from typing import Any, Protocol, Union, _AnnotatedAlias, get_args, get_origin
 
@@ -85,14 +86,14 @@ def cast(val: Any, typ: type) -> Any:
             if issubclass(ori, tuple):
                 if not args:
                     if val:
-                        raise TypeError("too many values given")
+                        raise ValueError("too many values given")
                     return val if isinstance(val, ori) else ori()
                 if args[1:] == (Ellipsis,):
                     return ori(map(cast, val, repeat(args[0])))
 
                 ret = ori(map(cast, val, args))
                 if len(ret) != len(args):
-                    raise TypeError("wrong number of values")
+                    raise ValueError("wrong number of values")
                 return ret
 
             if issubclass(ori, (list, set, frozenset)):
@@ -108,22 +109,31 @@ def cast(val: Any, typ: type) -> Any:
                     }
                 )
 
-        raise TypeError(f"type no understood: {typ}")
     elif typ is Any:
         return val
     # primitive types
     elif typ is None or typ is NoneType:
         if val is not None:
-            raise TypeError("invalid value for None")
+            raise CastError(val, None)
         return None
-    elif isinstance(val, typ):
-        return val
-    elif (val is None or isinstance(val, str)) and (
-        typ is bool or isinstance(type, typ) and issubclass(typ, bool)
-    ):
-        raise TypeError(f"can't cast {val!r} to {typ}")
-    else:
-        ret = typ(val)
-        if isinstance(val, _numeric) and isinstance(ret, _numeric) and ret != val:
-            raise ValueError(f"cast to {typ} not accurate: {val!r}!={ret!r}")
-        return ret
+    elif isinstance(typ, type):
+        if isinstance(val, typ):
+            return val
+        elif isinstance(val, Number) and issubclass(typ, Number):
+            ret = typ(val)
+            if not isinstance(ret, bool) and ret != val:
+                raise ValueError(f"cast to {typ} not accurate: {val!r}!={ret!r}")
+            return ret
+        elif (
+            issubclass(typ, bool)
+            or (isinstance(val, int) and issubclass(typ, (bytes, bytearray)))
+            or (
+                issubclass(typ, str)
+                and isinstance(val, (tuple, list, dict, set, frozenset))
+            )
+        ):
+            raise CastError(val, typ)
+        else:
+            return typ(val)
+
+    raise TypeError(f"type no understood: {typ}")

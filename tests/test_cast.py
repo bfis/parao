@@ -11,13 +11,20 @@ class TestCasting(TestCase):
         self.assertEqual(cast("1.3", float), 1.3)
         self.assertEqual(cast("1j", complex), 1j)
         self.assertEqual(cast(123, str), "123")
-        self.assertRaises(TypeError, lambda: cast("y", bool))
-        self.assertRaises(TypeError, lambda: cast(None, bool))
+
+        # forbidden
+        self.assertRaises(CastError, lambda: cast("y", bool))
+        self.assertRaises(CastError, lambda: cast(None, bool))
+        self.assertRaises(CastError, lambda: cast(123, bytes))
+        self.assertRaises(CastError, lambda: cast([], str))
 
         # None
         self.assertEqual(cast(None, None), None)
         self.assertEqual(cast(None, type(None)), None)
         self.assertRaises(TypeError, lambda: cast(True, None))
+
+        # bad type
+        self.assertRaises(TypeError, lambda: cast(..., ...))
 
     def test_containers(self):
         self.assertEqual(cast(["123"], list[int]), [123])
@@ -33,7 +40,7 @@ class TestCasting(TestCase):
 
         # empty tuple
         self.assertEqual(cast([], tuple[()]), ())
-        self.assertRaises(TypeError, lambda: cast([1], tuple[()]))
+        self.assertRaises(ValueError, lambda: cast([1], tuple[()]))
 
         # any tuple
         self.assertEqual(cast([1, 2, 3], tuple), (1, 2, 3))
@@ -42,7 +49,7 @@ class TestCasting(TestCase):
 
         # fixed tuple
         self.assertEqual(cast([1, 2, 3], tuple[int, str, float]), (1, "2", 3.0))
-        self.assertRaises(TypeError, lambda: cast([], tuple[int]))
+        self.assertRaises(ValueError, lambda: cast([], tuple[int]))
 
     def test_complex(self):
         self.assertRaises(ValueError, lambda: cast(1.2, int))
