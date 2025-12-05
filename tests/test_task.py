@@ -66,7 +66,7 @@ class Task3(BaseTask):
     dep3 = Param[Task1]()
     dep4 = Param[Task2]()
 
-    def run(self): ...
+    def run(self) -> None: ...
 
 
 class Task4(BaseTask):
@@ -74,7 +74,7 @@ class Task4(BaseTask):
     dep2 = Param[Task2]()
     dep3 = Param[Task1]()
 
-    def run(self): ...
+    def run(self) -> None: ...
 
 
 @pytest.fixture
